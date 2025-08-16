@@ -1,0 +1,42 @@
+{
+  "name": "doodledash",
+  "version": "1.0.0",
+  "description": "DoodleDash - Multiplayer drawing game with AI judging",
+  "main": "index.js",
+  "scripts": {
+    "build": "cd client && npm ci && npm run build && cd .. && cd server && npm ci --production",
+    "start": "node index.js",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm start",
+    "install:all": "npm run install:server && npm run install:client",
+    "install:server": "cd server && npm install",
+    "install:client": "cd client && npm install",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test -- --watchAll=false",
+    "postinstall": "npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": "18.x",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "multiplayer",
+    "drawing",
+    "game",
+    "socket.io",
+    "react",
+    "nodejs",
+    "doodledash"
+  ],
+  "author": "DoodleDash Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/doodledash.git"
+  }
+}

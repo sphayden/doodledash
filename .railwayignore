@@ -1,0 +1,14 @@
+# Development files
+docs/
+*.md
+!README.md
+.git/
+.vscode/
+.DS_Store
+*.log
+
+# Test files
+**/*.test.js
+**/*.test.ts
+**/__tests__/
+coverage/
