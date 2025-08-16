@@ -4,7 +4,7 @@
   "description": "DoodleDash - Multiplayer drawing game with AI judging",
   "main": "index.js",
   "scripts": {
-    "build": "cd client && npm ci && npm run build && cd .. && cd server && npm ci --production",
+    "build": "npm install --prefix client && npm install --prefix server --production && cd client && npm run build",
     "start": "node index.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
@@ -14,8 +14,7 @@
     "install:client": "cd client && npm install",
     "test": "npm run test:server && npm run test:client",
     "test:server": "cd server && npm test",
-    "test:client": "cd client && npm test -- --watchAll=false",
-    "postinstall": "npm run build"
+    "test:client": "cd client && npm test -- --watchAll=false"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
