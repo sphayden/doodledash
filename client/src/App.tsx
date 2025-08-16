@@ -26,7 +26,7 @@ import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 interface AppState {
-  currentScreen: 'start' | 'join' | 'lobby' | 'voting' | 'game' | 'results';
+  currentScreen: 'start' | 'join' | 'lobby' | 'voting' | 'game' | 'results' | 'judging-failed';
   playerName: string;
   gameManager: GameManager | null;
   gameState: GameState | null;
@@ -92,6 +92,13 @@ function App() {
   }, [appState.gameManager]);
 
   const handleGameStateChange = useCallback((gameState: GameState) => {
+    console.log('🔄 [APP] Game state change received:', {
+      gamePhase: gameState.gamePhase,
+      roomCode: gameState.roomCode,
+      hostId: gameState.hostId,
+      playerCount: gameState.playerCount
+    });
+    
     setAppState(prev => {
       // Hide tiebreaker modal when drawing phase starts
       const shouldHideTiebreaker = prev.showTieBreaker && gameState.gamePhase === 'drawing';
@@ -100,16 +107,20 @@ function App() {
         console.log('🎲 [APP] Hiding tiebreaker modal - drawing phase started');
       }
       
+      const newScreen = gameState.gamePhase === 'lobby' ? 'lobby' : 
+                        gameState.gamePhase === 'voting' ? 'voting' :
+                        gameState.gamePhase === 'drawing' ? 'game' :
+                        gameState.gamePhase === 'results' ? 'results' :
+                        gameState.gamePhase === 'judging-failed' ? 'judging-failed' : 'lobby';
+      
+      console.log('🔄 [APP] Screen transition:', prev.currentScreen, '->', newScreen);
+      
       return {
         ...prev,
         gameState: gameState,
         roomCode: gameState.roomCode,
         connectionStatus: gameState.connectionStatus,
-        currentScreen: gameState.gamePhase === 'lobby' ? 'lobby' : 
-                       gameState.gamePhase === 'voting' ? 'voting' :
-                       gameState.gamePhase === 'drawing' ? 'game' :
-                       gameState.gamePhase === 'results' ? 'results' :
-                       gameState.gamePhase === 'judging-failed' ? 'judging-failed' : 'lobby',
+        currentScreen: newScreen,
         // Hide tiebreaker modal when drawing starts
         showTieBreaker: shouldHideTiebreaker ? false : prev.showTieBreaker,
         tiedOptions: shouldHideTiebreaker ? [] : prev.tiedOptions,
