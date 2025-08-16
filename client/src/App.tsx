@@ -32,7 +32,7 @@ interface AppState {
   gameState: GameState | null;
   isHost: boolean;
   roomCode: string;
-  error: string;
+  error: string | undefined;
   isConnecting: boolean;
   showTieBreaker: boolean;
   tiedOptions: string[];
@@ -44,6 +44,8 @@ interface AppState {
   maxReconnectionAttempts: number;
   nextAttemptIn: number;
   showDevTools: boolean;
+  showWaitingModal: boolean;
+  waitingMessage: string;
   devToolsService: DevToolsService | null;
 }
 
@@ -65,7 +67,7 @@ function App() {
     gameState: null,
     isHost: false,
     roomCode: '',
-    error: '',
+    error: undefined,
     isConnecting: false,
     showTieBreaker: false,
     tiedOptions: [],
@@ -77,6 +79,8 @@ function App() {
     maxReconnectionAttempts: 5,
     nextAttemptIn: 0,
     showDevTools: false,
+    showWaitingModal: false,
+    waitingMessage: '',
     devToolsService: null
   });
 
@@ -124,7 +128,10 @@ function App() {
         // Hide tiebreaker modal when drawing starts
         showTieBreaker: shouldHideTiebreaker ? false : prev.showTieBreaker,
         tiedOptions: shouldHideTiebreaker ? [] : prev.tiedOptions,
-        winningWord: shouldHideTiebreaker ? '' : prev.winningWord
+        winningWord: shouldHideTiebreaker ? '' : prev.winningWord,
+        // Hide waiting modal when successfully joining lobby
+        showWaitingModal: gameState.gamePhase === 'lobby' ? false : prev.showWaitingModal,
+        waitingMessage: gameState.gamePhase === 'lobby' ? '' : prev.waitingMessage
       };
     });
   }, []);
@@ -154,6 +161,19 @@ function App() {
       }));
       
       return; // Don't process further
+    }
+    
+    // Handle waiting for host scenario
+    if (error.code === 'WAITING_FOR_HOST') {
+      console.log('🔄 Showing waiting for host modal');
+      setAppState(prev => ({
+        ...prev,
+        showWaitingModal: true,
+        waitingMessage: error.message,
+        error: undefined,
+        showErrorModal: false
+      }));
+      return;
     }
     
     // Handle max reconnection attempts reached
@@ -212,7 +232,7 @@ function App() {
         ...prev, 
         playerName, 
         isConnecting: true, 
-        error: '',
+        error: undefined,
         connectionStatus: 'connecting'
       }));
 
@@ -278,7 +298,7 @@ function App() {
       ...prev,
       playerName,
       currentScreen: 'join',
-      error: '',
+      error: undefined,
       gameManager: null,
       gameState: null,
       roomCode: '',
@@ -291,7 +311,7 @@ function App() {
       setAppState(prev => ({ 
         ...prev, 
         isConnecting: true, 
-        error: '',
+        error: undefined,
         connectionStatus: 'connecting'
       }));
 
@@ -349,7 +369,7 @@ function App() {
     setAppState(prev => ({
       ...prev,
       currentScreen: 'start',
-      error: '',
+      error: undefined,
       isConnecting: false,
       playerName: prev.playerName || getSavedPlayerName() // Preserve current session name, fallback to saved
     }));
@@ -358,7 +378,7 @@ function App() {
   const clearError = () => {
     setAppState(prev => ({
       ...prev,
-      error: '',
+      error: undefined,
       showErrorModal: false
     }));
   };
@@ -368,7 +388,7 @@ function App() {
       // Clear error and attempt to reconnect
       setAppState(prev => ({
         ...prev,
-        error: '',
+        error: undefined,
         showErrorModal: false,
         isConnecting: true,
         connectionStatus: 'connecting'
@@ -532,7 +552,7 @@ function App() {
             roomCode={appState.roomCode}
             isConnected={appState.gameState?.isConnected || false}
             connectionStatus={appState.connectionStatus}
-            error={appState.gameState?.lastError || null}
+            error={appState.gameState?.lastError || undefined}
             isStarting={appState.isConnecting && appState.gameState?.gamePhase === 'lobby'}
           />
         );
@@ -709,7 +729,7 @@ function App() {
       {appState.gameManager && (
         <ConnectionStatus
           connectionStatus={appState.connectionStatus}
-          error={appState.gameState?.lastError || null}
+          error={appState.gameState?.lastError || undefined}
           onRetry={handleRetry}
           className="connection-status-fixed"
         />
@@ -768,8 +788,25 @@ function App() {
         nextAttemptIn={appState.nextAttemptIn}
         onCancel={handleCancelReconnection}
         onRetryNow={handleRetry}
-        error={appState.error}
+        error={appState.error || ''}
       />
+
+      {/* Waiting for Host Modal */}
+      {appState.showWaitingModal && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-body text-center p-4">
+                <div className="spinner-border text-primary mb-3" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+                <h5 className="mb-2">Waiting for Host</h5>
+                <p className="text-muted mb-0">{appState.waitingMessage}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Developer Tools Panel */}
       {appState.devToolsService && (

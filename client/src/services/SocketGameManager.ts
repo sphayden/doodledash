@@ -75,6 +75,9 @@ export class SocketGameManager implements GameManager {
   /** Callbacks for handling tie-breaker scenarios */
   private tieBreakerCallbacks: TieBreakerCallbacks | null = null;
   
+  /** Callback for showing waiting messages */
+  private showWaitingMessage?: (message: string) => void;
+  
   /** Callback for auto-submit when timer expires */
   private onAutoSubmitRequired: (() => void) | null = null;
   
@@ -566,6 +569,22 @@ export class SocketGameManager implements GameManager {
       } catch (callbackError) {
         console.error('Error in error callback:', callbackError);
       }
+    });
+  }
+
+  /**
+   * Handle waiting for host scenario
+   */
+  private handleWaitingForHost(message: string): void {
+    console.log('🔄 [CLIENT] Showing waiting for host modal:', message);
+    
+    // Create a special error that triggers the waiting modal
+    this.handleError({
+      code: 'WAITING_FOR_HOST',
+      message: message,
+      details: { isWaiting: true },
+      timestamp: new Date(),
+      recoverable: true
     });
   }
 
@@ -1095,6 +1114,8 @@ export class SocketGameManager implements GameManager {
         console.log('🔄 [CLIENT] Play again lobby created event received:', data);
         console.log('🔄 [CLIENT] Current socket ID:', this.socket?.id);
         console.log('🔄 [CLIENT] New host ID:', data.gameState?.hostId);
+        console.log('🔄 [CLIENT] Game state phase:', data.gameState?.gamePhase);
+        console.log('🔄 [CLIENT] Socket ID matches host:', this.socket?.id === data.gameState?.hostId);
         
         clearTimeout(timeout);
         this.socket?.off('play-again-lobby-created', handleLobbyCreated);
@@ -1130,8 +1151,14 @@ export class SocketGameManager implements GameManager {
         console.log('🔄 [CLIENT] Players ready:', data.playersReady, '/', data.totalPlayers);
         console.log('🔄 [CLIENT] Players needed:', data.playersNeeded);
         
-        // For now, we'll resolve immediately and let the UI handle the waiting state
-        // In the future, we could add a callback for waiting state updates
+        if (data.waitingForHost) {
+          console.log('🔄 [CLIENT] Waiting for host to start new game');
+          // Trigger waiting modal instead of blocking alert
+          this.handleWaitingForHost(data.message || 'Waiting for host to start new game...');
+          return; // Don't resolve, keep waiting
+        }
+        
+        // For other waiting states, resolve immediately
         clearTimeout(timeout);
         this.socket?.off('play-again-lobby-created', handleLobbyCreated);
         this.socket?.off('play-again-waiting', handleWaiting);

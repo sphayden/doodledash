@@ -394,28 +394,48 @@ io.on('connection', (socket) => {
       const result = await gameManager.handlePlayAgain(roomCode, socket.id);
       
       if (result.success) {
-        // New room created - move players to new lobby
-        const { newRoomCode, gameState, playersJoined, newHost } = result;
+        const { newRoomCode, gameState, playersJoined, newHost, notifyExistingPlayers } = result;
         
-        // Remove players from old room and add to new room
-        socket.leave(roomCode);
-        socket.join(newRoomCode);
-        
-        // Notify this player they're in the new lobby
-        socket.emit('play-again-lobby-created', {
-          newRoomCode,
-          gameState,
-          newHost
-        });
-        
-        // Notify other players who wanted to play again
-        for (const player of playersJoined) {
-          if (player.id !== socket.id) {
+        if (notifyExistingPlayers) {
+          // Player joining existing lobby - notify the joining player and update existing players
+          console.log(`🔄 [SERVER] Player joining existing lobby ${newRoomCode}`);
+          
+          // Move joining player to new room and notify them
+          socket.leave(roomCode);
+          socket.join(newRoomCode);
+          socket.emit('play-again-lobby-created', {
+            newRoomCode,
+            gameState,
+            newHost
+          });
+          
+          // Notify existing players in the lobby about the updated game state
+          socket.to(newRoomCode).emit('player-joined', {
+            playerId: socket.id,
+            playerName: playersJoined[0].name,
+            gameState
+          });
+          
+          console.log(`🔄 Player ${playersJoined[0].name} joined existing lobby ${newRoomCode}`);
+        } else {
+          // New room created - move all players to new lobby
+          console.log(`🔄 [SERVER] New lobby created ${newRoomCode}`);
+          
+          // Notify ALL players who wanted to play again
+          for (const player of playersJoined) {
             const playerSocket = io.sockets.sockets.get(player.id);
             if (playerSocket && playerSocket.connected) {
-              console.log(`🔄 Moving player ${player.name} (${player.id}) to new lobby ${newRoomCode}`);
+              console.log(`🔄 [SERVER] Moving player ${player.name} (${player.id}) to new lobby ${newRoomCode}`);
+              console.log(`🔄 [SERVER] Sending play-again-lobby-created to ${player.id}`);
+              console.log(`🔄 [SERVER] Game state phase: ${gameState.gamePhase}`);
+              console.log(`🔄 [SERVER] Host ID: ${gameState.hostId}`);
+              console.log(`🔄 [SERVER] Socket ID matches host: ${player.id === gameState.hostId}`);
+              
+              // Move player to new room
               playerSocket.leave(roomCode);
               playerSocket.join(newRoomCode);
+              
+              // Send the lobby created event
               playerSocket.emit('play-again-lobby-created', {
                 newRoomCode,
                 gameState,
@@ -425,9 +445,9 @@ io.on('connection', (socket) => {
               console.warn(`🔄 Player ${player.name} (${player.id}) socket not found or disconnected`);
             }
           }
+          
+          console.log(`🔄 Successfully created play-again lobby ${newRoomCode} with ${playersJoined.length} players`);
         }
-        
-        console.log(`🔄 Successfully created play-again lobby ${newRoomCode} with ${playersJoined.length} players`);
       } else {
         // Still waiting for more players
         socket.emit('play-again-waiting', result);

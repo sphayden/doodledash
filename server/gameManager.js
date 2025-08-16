@@ -334,13 +334,33 @@ class GameManager {
     console.log(`🔄 [MANAGER] Play-again status: ${room.playAgainRequests.size}/${room.players.size} players ready`);
     console.log(`🔄 [MANAGER] Players who want to play again:`, Array.from(room.playAgainRequests).map(id => room.players.get(id)?.name || id));
     
-    const playersNeeded = Math.max(2, Math.ceil(room.players.size / 2));
-    console.log(`🔄 [MANAGER] Need ${playersNeeded} players to start new game`);
+    // Check if the requesting player is the host
+    const isHost = room.isHost(playerId);
+    console.log(`🔄 [MANAGER] Player is host: ${isHost}`);
     
-    // Check if we have enough players (at least 2) to start a new game
-    if (room.playAgainRequests.size >= 2 && room.playAgainRequests.size >= playersNeeded) {
-      console.log(`🔄 [MANAGER] Enough players ready! Creating new room...`);
+    // If host requests play again, create new lobby immediately
+    if (isHost) {
+      console.log(`🔄 [MANAGER] Host requested play again - creating new lobby`);
       return await this.createPlayAgainRoom(roomCode);
+    }
+    
+    // For non-host players, check if host has already created a lobby
+    const hostId = room.hostId;
+    const hostAlreadyRequested = room.playAgainRequests.has(hostId);
+    
+    if (hostAlreadyRequested) {
+      console.log(`🔄 [MANAGER] Host already created lobby - adding non-host player`);
+      return await this.joinExistingPlayAgainRoom(roomCode, playerId);
+    } else {
+      console.log(`🔄 [MANAGER] Non-host waiting for host to start new game`);
+      return {
+        waiting: true,
+        waitingForHost: true,
+        message: "Waiting for host to start new game...",
+        playersReady: room.playAgainRequests.size,
+        totalPlayers: room.players.size,
+        playersNeeded: 1 // Just need the host
+      };
     }
     
     // Return current state - waiting for more players
@@ -354,6 +374,47 @@ class GameManager {
   }
   
   /**
+   * Join existing play again room (for non-host players)
+   */
+  async joinExistingPlayAgainRoom(originalRoomCode, playerId) {
+    console.log(`🔄 [MANAGER] joinExistingPlayAgainRoom called for ${originalRoomCode}, player: ${playerId}`);
+    
+    const originalRoom = this.rooms.get(originalRoomCode);
+    if (!originalRoom || !originalRoom.playAgainRoomCode) {
+      throw new Error('No existing play again room found');
+    }
+    
+    const newRoomCode = originalRoom.playAgainRoomCode;
+    const newRoom = this.rooms.get(newRoomCode);
+    if (!newRoom) {
+      throw new Error('Play again room no longer exists');
+    }
+    
+    const player = originalRoom.players.get(playerId);
+    if (!player) {
+      throw new Error('Player not found in original room');
+    }
+    
+    // Add player to existing room
+    console.log(`🔄 [MANAGER] Adding player ${player.name} to existing room ${newRoomCode}`);
+    newRoom.addPlayer(playerId, player.name, false);
+    this.playerRooms.set(playerId, newRoomCode);
+    
+    // Return info about the joining player AND trigger update for existing players
+    return {
+      success: true,
+      newRoomCode,
+      gameState: newRoom.getGameState(),
+      playersJoined: [{ id: playerId, name: player.name, isHost: false }],
+      newHost: {
+        id: newRoom.hostId,
+        name: newRoom.players.get(newRoom.hostId)?.name || 'Unknown'
+      },
+      notifyExistingPlayers: true // Flag to notify existing players
+    };
+  }
+
+  /**
    * Create a new room for play again session
    */
   async createPlayAgainRoom(originalRoomCode) {
@@ -365,49 +426,36 @@ class GameManager {
       throw new Error('Original room not found');
     }
     
-    // Determine new host - prefer original host if they want to play again, otherwise pick first player
-    let newHostId = null;
-    const originalHostId = originalRoom.hostId;
-    const originalHostName = originalRoom.players.get(originalHostId)?.name || 'Unknown';
-    
-    console.log(`🔄 [MANAGER] Original host: ${originalHostName} (${originalHostId})`);
-    console.log(`🔄 [MANAGER] Original host wants to play again: ${originalRoom.playAgainRequests.has(originalHostId)}`);
-    
-    if (originalRoom.playAgainRequests.has(originalHostId)) {
-      newHostId = originalHostId;
-      console.log(`🔄 [MANAGER] Original host will remain host`);
-    } else {
-      // Pick first player who wants to play again as new host
-      newHostId = Array.from(originalRoom.playAgainRequests)[0];
-      const newHostName = originalRoom.players.get(newHostId)?.name || 'Unknown';
-      console.log(`🔄 [MANAGER] New host will be: ${newHostName} (${newHostId})`);
-    }
-    
-    const newHostPlayer = originalRoom.players.get(newHostId);
-    if (!newHostPlayer) {
-      console.error(`🔄 [MANAGER] New host player not found: ${newHostId}`);
-      throw new Error('New host player not found');
+    // Host is always the new host (since this is only called when host requests play again)
+    const hostId = originalRoom.hostId;
+    const hostPlayer = originalRoom.players.get(hostId);
+    if (!hostPlayer) {
+      console.error(`🔄 [MANAGER] Host player not found: ${hostId}`);
+      throw new Error('Host player not found');
     }
     
     // Create new room
     const newRoomCode = generateRoomCode();
     console.log(`🔄 [MANAGER] Creating new room: ${newRoomCode}`);
     
-    const newGameRoom = new GameRoom(newRoomCode, newHostId);
+    const newGameRoom = new GameRoom(newRoomCode, hostId);
     
     // Set up timer expired callback
     newGameRoom.setTimerExpiredCallback(() => {
       this.handleDrawingTimerExpired(newRoomCode);
     });
     
-    // Add all players who want to play again
+    // Store the new room code in the original room so other players can join
+    originalRoom.playAgainRoomCode = newRoomCode;
+    
+    // Add all players who have requested play again so far
     const playersToAdd = [];
     console.log(`🔄 [MANAGER] Adding players to new room...`);
     
     for (const playerId of originalRoom.playAgainRequests) {
       const player = originalRoom.players.get(playerId);
       if (player) {
-        const isHost = playerId === newHostId;
+        const isHost = playerId === hostId;
         console.log(`🔄 [MANAGER] Adding player: ${player.name} (${playerId}), isHost: ${isHost}`);
         
         try {
@@ -421,19 +469,13 @@ class GameManager {
         } catch (error) {
           console.error(`🔄 [MANAGER] Error adding player ${player.name}:`, error);
         }
-      } else {
-        console.warn(`🔄 [MANAGER] Player ${playerId} not found in original room`);
       }
     }
     
     this.rooms.set(newRoomCode, newGameRoom);
     
     console.log(`🔄 [MANAGER] Successfully created new play-again room ${newRoomCode} with ${playersToAdd.length} players`);
-    console.log(`🔄 [MANAGER] New host: ${newHostPlayer.name} (${newHostId})`);
-    console.log(`🔄 [MANAGER] Players in new room:`, playersToAdd.map(p => `${p.name} (host: ${p.isHost})`));
-    
-    // Clean up original room's play again session
-    this.cleanupPlayAgainSession(originalRoomCode);
+    console.log(`🔄 [MANAGER] Host: ${hostPlayer.name} (${hostId})`);
     
     return {
       success: true,
@@ -441,8 +483,8 @@ class GameManager {
       gameState: newGameRoom.getGameState(),
       playersJoined: playersToAdd,
       newHost: {
-        id: newHostId,
-        name: newHostPlayer.name
+        id: hostId,
+        name: hostPlayer.name
       }
     };
   }
