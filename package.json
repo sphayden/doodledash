@@ -1,6 +1,6 @@
 {
   "name": "doodledash",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "DoodleDash - Multiplayer drawing game with AI judging",
   "main": "index.js",
   "scripts": {
