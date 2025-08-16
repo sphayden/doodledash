@@ -1,0 +1,50 @@
+<svg width="400" height="120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#f8f9fa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e9ecef;stop-opacity:1" />
+    </linearGradient>
+    <filter id="textShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+  </defs>
+  
+  <!-- Decorative drawing elements -->
+  <g stroke="rgba(255,255,255,0.6)" stroke-width="3" fill="none" stroke-linecap="round">
+    <!-- Pencil icon -->
+    <path d="M30 30 L50 50 M45 35 L55 25 M50 30 L60 20" />
+    <!-- Brush strokes -->
+    <path d="M320 25 Q340 35 360 25 Q380 15 390 25" />
+    <path d="M310 45 Q330 55 350 45" />
+    <!-- Star doodle -->
+    <path d="M370 70 L375 80 L385 80 L377 87 L380 97 L370 90 L360 97 L363 87 L355 80 L365 80 Z" />
+  </g>
+  
+  <!-- Main title -->
+  <text x="200" y="70" 
+        font-family="'Comic Sans MS', cursive, Arial, sans-serif" 
+        font-size="52" 
+        font-weight="bold" 
+        fill="url(#textGradient)" 
+        text-anchor="middle" 
+        filter="url(#textShadow)">
+    Doodle
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="200" y="95" 
+        font-family="Arial, sans-serif" 
+        font-size="14" 
+        fill="rgba(255,255,255,0.9)" 
+        text-anchor="middle">
+    Draw • Guess • Win
+  </text>
+  
+  <!-- Decorative underline -->
+  <path d="M120 105 Q200 110 280 105" 
+        stroke="rgba(255,255,255,0.4)" 
+        stroke-width="2" 
+        fill="none" 
+        stroke-linecap="round"/>
+</svg>
