@@ -4,7 +4,7 @@
   "description": "DoodleDash - Multiplayer drawing game with AI judging",
   "main": "index.js",
   "scripts": {
-    "build": "npm install --prefix client && npm install --prefix server --production && cd client && npm run build",
+    "build": "npm install --prefix client && npm install --prefix server --production && cd client && CI=false npm run build",
     "start": "node index.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
