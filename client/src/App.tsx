@@ -108,7 +108,8 @@ function App() {
         currentScreen: gameState.gamePhase === 'lobby' ? 'lobby' : 
                        gameState.gamePhase === 'voting' ? 'voting' :
                        gameState.gamePhase === 'drawing' ? 'game' :
-                       gameState.gamePhase === 'results' ? 'results' : 'lobby',
+                       gameState.gamePhase === 'results' ? 'results' :
+                       gameState.gamePhase === 'judging-failed' ? 'judging-failed' : 'lobby',
         // Hide tiebreaker modal when drawing starts
         showTieBreaker: shouldHideTiebreaker ? false : prev.showTieBreaker,
         tiedOptions: shouldHideTiebreaker ? [] : prev.tiedOptions,
@@ -607,7 +608,78 @@ function App() {
             }}
           />
         );
-              default:
+      case 'judging-failed':
+        if (!appState.gameState) return null;
+        return (
+          <div className="judging-failed-screen">
+            <div className="container-fluid">
+              <div className="row justify-content-center">
+                <div className="col-md-8 col-lg-6">
+                  <div className="card bg-danger text-white">
+                    <div className="card-body text-center">
+                      <h2 className="card-title">
+                        <i className="fas fa-exclamation-triangle me-2"></i>
+                        AI Judging Failed
+                      </h2>
+                      <p className="card-text">
+                        Unfortunately, the AI judge couldn't evaluate the drawings due to a technical issue.
+                      </p>
+                      <p className="card-text">
+                        <small>Error: {appState.gameState.judgingError || 'Unknown error'}</small>
+                      </p>
+                      <div className="mt-4">
+                        <button 
+                          className="btn btn-light me-3"
+                          onClick={() => {
+                            if (appState.gameManager) {
+                              appState.gameManager.destroy();
+                            }
+                            setAppState(prev => ({ 
+                              ...prev, 
+                              currentScreen: 'start', 
+                              gameManager: null, 
+                              gameState: null,
+                              connectionStatus: 'disconnected',
+                              playerName: prev.playerName
+                            }));
+                          }}
+                        >
+                          <i className="fas fa-home me-2"></i>
+                          New Game
+                        </button>
+                        <button 
+                          className="btn btn-outline-light"
+                          onClick={async () => {
+                            if (appState.gameManager) {
+                              try {
+                                await appState.gameManager.playAgain();
+                              } catch (error) {
+                                console.error('Play again failed:', error);
+                                appState.gameManager.destroy();
+                                setAppState(prev => ({ 
+                                  ...prev, 
+                                  currentScreen: 'start', 
+                                  gameManager: null, 
+                                  gameState: null,
+                                  connectionStatus: 'disconnected',
+                                  playerName: prev.playerName
+                                }));
+                              }
+                            }
+                          }}
+                        >
+                          <i className="fas fa-redo me-2"></i>
+                          Try Again
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      default:
         return <StartScreen 
           onHostGame={hostGame} 
           onJoinGame={showJoinGame} 

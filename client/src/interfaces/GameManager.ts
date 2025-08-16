@@ -125,7 +125,7 @@ export interface GameState {
   
   // Game Flow
   /** Current phase of the game */
-  gamePhase: 'lobby' | 'voting' | 'drawing' | 'judging' | 'results';
+  gamePhase: 'lobby' | 'voting' | 'drawing' | 'judging' | 'results' | 'judging-failed';
   
   // Voting Data
   /** Array of word options to vote on */
@@ -150,6 +150,8 @@ export interface GameState {
   // Error State
   /** Last error that occurred (if any) */
   lastError?: GameError;
+  /** Error message when AI judging fails */
+  judgingError?: string;
 }
 
 /**

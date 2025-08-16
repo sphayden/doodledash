@@ -85,7 +85,18 @@ gameManager.setTimerCallbacks({
   },
   onJudgingError: (roomCode, error) => {
     console.error(`❌ AI judging error for room: ${roomCode}:`, error);
-    io.to(roomCode).emit('error', { message: 'AI judging failed' });
+    
+    // Get the room and set it to a failed judging state
+    const room = gameManager.rooms.get(roomCode);
+    if (room) {
+      room.setJudgingFailed(error.message);
+      io.to(roomCode).emit('judging-failed', { 
+        gameState: room.getGameState(),
+        error: error.message 
+      });
+    } else {
+      io.to(roomCode).emit('error', { message: 'AI judging failed' });
+    }
   }
 });
 

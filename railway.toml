@@ -11,3 +11,4 @@ restartPolicyMaxRetries = 3
 
 [env]
 NODE_ENV = "production"
+ENABLE_AI_JUDGING = "false"

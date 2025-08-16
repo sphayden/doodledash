@@ -88,6 +88,7 @@ export interface NetworkEvents {
   'drawing-started': (data: any) => void;
   'drawing-submitted': (data: any) => void;
   'judging-complete': (data: any) => void;
+  'judging-failed': (data: any) => void;
   'real-time-stroke': (data: any) => void;
   'error': (data: any) => void;
 }

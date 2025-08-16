@@ -356,6 +356,15 @@ class GameRoom {
   }
 
   /**
+   * Set judging failed state
+   */
+  setJudgingFailed(errorMessage) {
+    this.gamePhase = 'judging-failed';
+    this.judgingError = errorMessage;
+    this.aiResults = []; // No results due to failure
+  }
+
+  /**
    * Utility methods
    */
   hasPlayer(playerId) {

@@ -38,7 +38,7 @@ export {
 } from './NetworkManager';
 
 // Re-export commonly used types for convenience
-export type GamePhase = 'lobby' | 'voting' | 'drawing' | 'judging' | 'results';
+export type GamePhase = 'lobby' | 'voting' | 'drawing' | 'judging' | 'results' | 'judging-failed';
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 /**

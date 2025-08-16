@@ -424,6 +424,18 @@ export class SocketGameManager implements GameManager {
       this.updateGameState(data.gameState);
     });
 
+    this.socket.on('judging-failed', (data) => {
+      console.error('❌ AI judging failed:', data.error);
+      this.updateGameState(data.gameState);
+      this.handleError({
+        code: 'AI_JUDGING_FAILED',
+        message: `AI judging failed: ${data.error}`,
+        details: { error: data.error },
+        timestamp: new Date(),
+        recoverable: true
+      });
+    });
+
     // Real-time drawing events
     this.socket.on('real-time-stroke', (data) => {
       // Forward to canvas for real-time viewing (optional feature)

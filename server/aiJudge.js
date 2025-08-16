@@ -52,8 +52,8 @@ class AIJudge {
     } catch (error) {
       console.error('❌ AI Judge: Evaluation failed:', error);
       
-      // Fallback: Return random rankings to prevent game from breaking
-      return this.generateFallbackResults(drawingSubmissions);
+      // Don't generate fake results - throw the error to be handled properly
+      throw new Error(`AI judging failed: ${error.message}`);
     }
   }
 
