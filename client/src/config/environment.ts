@@ -107,7 +107,7 @@ const environmentConfigs: Record<Environment, ClientConfig> = {
     environment: 'production',
     
     // Server Configuration
-    serverUrl: process.env.REACT_APP_SERVER_URL || 'https://api.doodle-game.com',
+    serverUrl: process.env.REACT_APP_SERVER_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://doodledash-production.up.railway.app'),
     socketTimeout: 20000,
     reconnectAttempts: 3,
     reconnectDelay: 5000,
