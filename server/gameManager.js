@@ -305,11 +305,23 @@ class GameManager {
     // If room is empty, clean up immediately
     if (room.isEmpty()) {
       this.cleanupRoom(roomCode);
-      callback(roomCode, null); // Signal room closed
+      callback(roomCode, null, wasHost, false); // Signal room closed
     }
     // If host left but game is finished, delay cleanup to allow play-again
     else if (wasHost && (room.gamePhase === 'results' || room.gamePhase === 'judging-failed')) {
       console.log(`🔄 Host left finished game ${roomCode}, delaying cleanup for play-again`);
+      
+      // Always set host left flag when host disconnects from finished game
+      room.hostLeft = true;
+      room.hostLeftMessage = 'The host has left the game. You can continue waiting for them to return or start a new game.';
+      
+      let hostLeft = false;
+      // If there are players waiting for play again, notify them that host left
+      if (room.playAgainRequests && room.playAgainRequests.size > 0) {
+        console.log(`🔄 Notifying ${room.playAgainRequests.size} players that host left`);
+        hostLeft = true;
+      }
+      
       // Set a timeout to cleanup after 2 minutes if no play-again activity
       setTimeout(() => {
         const currentRoom = this.rooms.get(roomCode);
@@ -318,14 +330,14 @@ class GameManager {
           this.cleanupRoom(roomCode);
         }
       }, 120000); // 2 minutes
-      callback(roomCode, room.getGameState());
+      callback(roomCode, room.getGameState(), wasHost, hostLeft);
     }
     // If host left during active game, clean up immediately
     else if (wasHost) {
       this.cleanupRoom(roomCode);
-      callback(roomCode, null); // Signal room closed
+      callback(roomCode, null, wasHost, false); // Signal room closed
     } else {
-      callback(roomCode, room.getGameState());
+      callback(roomCode, room.getGameState(), wasHost, false);
     }
   }
 
@@ -389,6 +401,20 @@ class GameManager {
       return await this.joinExistingPlayAgainRoom(roomCode, playerId);
     } else {
       console.log(`🔄 [MANAGER] Non-host waiting for host to start new game`);
+      
+      // Check if host has left
+      if (room.hostLeft) {
+        return {
+          waiting: true,
+          waitingForHost: true,
+          hostLeft: true,
+          message: room.hostLeftMessage || "The host has left the game. They may return to start a new game.",
+          playersReady: room.playAgainRequests.size,
+          totalPlayers: room.players.size,
+          playersNeeded: 1
+        };
+      }
+      
       return {
         waiting: true,
         waitingForHost: true,

@@ -114,10 +114,23 @@ function App() {
       const newScreen = gameState.gamePhase === 'lobby' ? 'lobby' : 
                         gameState.gamePhase === 'voting' ? 'voting' :
                         gameState.gamePhase === 'drawing' ? 'game' :
+                        gameState.gamePhase === 'judging' ? 'results' : // Go to results screen during judging
                         gameState.gamePhase === 'results' ? 'results' :
                         gameState.gamePhase === 'judging-failed' ? 'results' : 'lobby';
       
       console.log('🔄 [APP] Screen transition:', prev.currentScreen, '->', newScreen);
+      
+      // Determine if current player is host based on game state
+      const currentPlayerId = prev.gameManager?.getCurrentPlayer()?.id;
+      const gameManagerIsHost = prev.gameManager?.isHost() || false;
+      const isHost = gameState.hostId === currentPlayerId || gameManagerIsHost;
+      
+      console.log('🔄 [APP] Host check:', {
+        gameStateHostId: gameState.hostId,
+        currentPlayerId: currentPlayerId,
+        gameManagerIsHost: gameManagerIsHost,
+        finalIsHost: isHost
+      });
       
       return {
         ...prev,
@@ -125,6 +138,7 @@ function App() {
         roomCode: gameState.roomCode,
         connectionStatus: gameState.connectionStatus,
         currentScreen: newScreen,
+        isHost: isHost, // Update isHost based on current game state
         // Hide tiebreaker modal when drawing starts
         showTieBreaker: shouldHideTiebreaker ? false : prev.showTieBreaker,
         tiedOptions: shouldHideTiebreaker ? [] : prev.tiedOptions,
@@ -172,6 +186,18 @@ function App() {
         waitingMessage: error.message,
         error: undefined,
         showErrorModal: false
+      }));
+      return;
+    }
+    
+    // Handle host left scenario - only show modal if automatic game creation failed
+    if (error.code === 'HOST_LEFT') {
+      console.log('🔄 Host left - showing fallback error modal');
+      setAppState(prev => ({
+        ...prev,
+        error: error.message,
+        showErrorModal: true,
+        showWaitingModal: false
       }));
       return;
     }

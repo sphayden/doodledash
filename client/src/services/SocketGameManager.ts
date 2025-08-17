@@ -364,6 +364,12 @@ export class SocketGameManager implements GameManager {
       console.log('👋 Player left:', data.playerId);
       this.updateGameState(data.gameState);
     });
+    
+    // Host left during play again waiting
+    this.socket.on('host-left-during-wait', (data) => {
+      console.log('🔄 [CLIENT] Host left during play again wait:', data.message);
+      this.handleHostLeft(data.message);
+    });
 
     // Game flow events
     this.socket.on('voting-started', (data) => {
@@ -586,6 +592,14 @@ export class SocketGameManager implements GameManager {
       timestamp: new Date(),
       recoverable: true
     });
+  }
+  
+  private handleHostLeft(message: string): void {
+    console.log('🔄 [CLIENT] Host has left, waiting for server to create new lobby with all waiting players');
+    
+    // The server will automatically create a new lobby for all waiting players
+    // and send a 'play-again-lobby-created' event. We just need to wait for it.
+    // If it fails, the server will send the old 'play-again-waiting' event as fallback.
   }
 
   private async attemptAutoRecovery(error: GameError): Promise<void> {
@@ -1107,7 +1121,7 @@ export class SocketGameManager implements GameManager {
           GameErrorCode.CONNECTION_TIMEOUT,
           'Play again request timed out'
         ));
-      }, 10000); // 10 second timeout
+      }, 30000); // 30 second timeout
 
       // Handle successful lobby creation
       const handleLobbyCreated = (data: any) => {
@@ -1153,8 +1167,15 @@ export class SocketGameManager implements GameManager {
         
         if (data.waitingForHost) {
           console.log('🔄 [CLIENT] Waiting for host to start new game');
-          // Trigger waiting modal instead of blocking alert
-          this.handleWaitingForHost(data.message || 'Waiting for host to start new game...');
+          
+          // Handle case where host has left
+          if (data.hostLeft) {
+            console.log('🔄 [CLIENT] Host has left the game');
+            this.handleHostLeft(data.message || 'The host has left the game.');
+          } else {
+            // Trigger waiting modal instead of blocking alert
+            this.handleWaitingForHost(data.message || 'Waiting for host to start new game...');
+          }
           return; // Don't resolve, keep waiting
         }
         

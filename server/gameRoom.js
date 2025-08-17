@@ -443,7 +443,11 @@ class GameRoom {
       results: this.aiResults || [],
       
       // Error data (only present when judging fails)
-      judgingError: this.judgingError
+      judgingError: this.judgingError,
+      
+      // Play again data
+      hostLeft: this.hostLeft,
+      hostLeftMessage: this.hostLeftMessage
     };
   }
 

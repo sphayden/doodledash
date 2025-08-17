@@ -3,7 +3,7 @@
  * Handles different configurations for development, staging, and production environments
  */
 
-require('dotenv').config();
+require('dotenv').config({ path: '../.env' });
 
 /**
  * Get current environment
@@ -57,6 +57,8 @@ const environmentConfigs = {
     
     // AI Configuration
     openaiApiKey: process.env.OPENAI_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    aiProvider: process.env.AI_PROVIDER || 'auto', // 'openai', 'gemini', or 'auto'
     enableAiJudging: process.env.ENABLE_AI_JUDGING === 'true',
     aiModel: process.env.AI_MODEL || 'gpt-4-vision-preview',
     aiTimeout: parseInt(process.env.AI_TIMEOUT) || 30000,
@@ -110,6 +112,8 @@ const environmentConfigs = {
     
     // AI Configuration
     openaiApiKey: process.env.OPENAI_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    aiProvider: process.env.AI_PROVIDER || 'auto',
     enableAiJudging: process.env.ENABLE_AI_JUDGING !== 'false',
     aiModel: process.env.AI_MODEL || 'gpt-4-vision-preview',
     aiTimeout: parseInt(process.env.AI_TIMEOUT) || 30000,
@@ -163,6 +167,8 @@ const environmentConfigs = {
     
     // AI Configuration
     openaiApiKey: process.env.OPENAI_API_KEY || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    aiProvider: process.env.AI_PROVIDER || 'auto',
     enableAiJudging: process.env.ENABLE_AI_JUDGING !== 'false',
     aiModel: process.env.AI_MODEL || 'gpt-4-vision-preview',
     aiTimeout: parseInt(process.env.AI_TIMEOUT) || 30000,
@@ -216,6 +222,8 @@ const environmentConfigs = {
     
     // AI Configuration
     openaiApiKey: process.env.OPENAI_API_KEY || 'test-key',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    aiProvider: process.env.AI_PROVIDER || 'auto',
     enableAiJudging: false, // Disable AI in tests
     aiModel: process.env.AI_MODEL || 'gpt-4-vision-preview',
     aiTimeout: parseInt(process.env.AI_TIMEOUT) || 5000,
@@ -278,8 +286,8 @@ function validateConfig() {
     errors.push('Client URL is required');
   }
   
-  if (config.enableAiJudging && !config.openaiApiKey) {
-    errors.push('OpenAI API key is required when AI judging is enabled');
+  if (config.enableAiJudging && !config.openaiApiKey && !config.geminiApiKey) {
+    errors.push('Either OpenAI or Gemini API key is required when AI judging is enabled');
   }
   
   if (config.maxRooms <= 0) {
@@ -309,6 +317,11 @@ function logCurrentConfig() {
     console.log(`Client URL: ${config.clientUrl}`);
     console.log(`Log Level: ${config.logLevel}`);
     console.log(`AI Judging: ${config.enableAiJudging ? 'Enabled' : 'Disabled'}`);
+    if (config.enableAiJudging) {
+      console.log(`AI Provider: ${config.aiProvider}`);
+      console.log(`OpenAI Available: ${config.openaiApiKey ? 'Yes' : 'No'}`);
+      console.log(`Gemini Available: ${config.geminiApiKey ? 'Yes' : 'No'}`);
+    }
     console.log(`Max Rooms: ${config.maxRooms}`);
     console.log(`Max Players per Room: ${config.maxPlayersPerRoom}`);
     console.log('');

@@ -1,17 +1,48 @@
 const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class AIJudge {
   constructor() {
+    // Check which AI services are available
     this.hasOpenAI = !!process.env.OPENAI_API_KEY;
+    this.hasGemini = !!process.env.GEMINI_API_KEY;
     
+    // Determine which service to use (preference: Gemini > OpenAI > Mock)
+    this.aiProvider = process.env.AI_PROVIDER || 'auto';
+    
+    // Initialize OpenAI if available
     if (this.hasOpenAI) {
       this.openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY
       });
       console.log('🤖 AI Judge: OpenAI API configured');
-    } else {
-      console.warn('⚠️ AI Judge: OpenAI API key not configured, using mock judging');
     }
+    
+    // Initialize Gemini if available
+    if (this.hasGemini) {
+      this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      this.geminiModel = this.gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      console.log('🤖 AI Judge: Gemini API configured');
+    }
+    
+    // Determine active provider
+    this.activeProvider = this.determineActiveProvider();
+    console.log(`🤖 AI Judge: Using ${this.activeProvider} for judging`);
+    
+    if (this.activeProvider === 'mock') {
+      console.warn('⚠️ AI Judge: No API keys configured, using mock judging');
+    }
+  }
+  
+  determineActiveProvider() {
+    if (this.aiProvider === 'openai' && this.hasOpenAI) return 'openai';
+    if (this.aiProvider === 'gemini' && this.hasGemini) return 'gemini';
+    
+    // Auto selection (prefer Gemini for cost efficiency)
+    if (this.hasGemini) return 'gemini';
+    if (this.hasOpenAI) return 'openai';
+    
+    return 'mock';
   }
 
   /**
@@ -22,10 +53,10 @@ class AIJudge {
       return [];
     }
 
-    console.log(`🤖 AI Judge: Evaluating ${drawingSubmissions.length} drawings for word: "${drawingSubmissions[0].word}"`);
+    console.log(`🤖 AI Judge: Evaluating ${drawingSubmissions.length} drawings for word: "${drawingSubmissions[0].word}" using ${this.activeProvider}`);
     
-    // If OpenAI is not available, use mock judging
-    if (!this.hasOpenAI) {
+    // If no AI is available, use mock judging
+    if (this.activeProvider === 'mock') {
       return this.mockEvaluateDrawings(drawingSubmissions);
     }
     
@@ -38,10 +69,8 @@ class AIJudge {
       // Sort by score (highest first)
       evaluations.sort((a, b) => b.score - a.score);
       
-      // Assign ranks
-      evaluations.forEach((evaluation, index) => {
-        evaluation.rank = index + 1;
-      });
+      // Assign ranks with proper tie handling
+      this.assignRanksWithTies(evaluations);
       
       console.log('🏆 AI Judge: Evaluation complete');
       evaluations.forEach(result => {
@@ -64,33 +93,23 @@ class AIJudge {
     const { playerId, playerName, canvasData, word } = submission;
     
     try {
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-4-vision-preview",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: this.generateEvaluationPrompt(word)
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: canvasData,
-                  detail: "low" // Use low detail to reduce costs and improve speed
-                }
-              }
-            ]
-          }
-        ],
-        max_tokens: 150,
-        temperature: 0.1 // Low temperature for consistent scoring
-      });
+      let aiResponse;
       
-      const aiResponse = response.choices[0].message.content;
+      if (this.activeProvider === 'openai') {
+        aiResponse = await this.evaluateWithOpenAI(canvasData, word);
+      } else if (this.activeProvider === 'gemini') {
+        aiResponse = await this.evaluateWithGemini(canvasData, word);
+      } else {
+        throw new Error('No AI provider available');
+      }
+      
+      // Debug: Log the raw AI response to understand what we're getting
+      console.log(`🔍 [DEBUG] Raw AI response for ${playerName}:`, aiResponse);
+      
       const score = this.parseScore(aiResponse);
       const feedback = this.parseFeedback(aiResponse);
+      
+      console.log(`🔍 [DEBUG] Parsed score for ${playerName}: ${score}`);
       
       return {
         playerId,
@@ -108,23 +127,84 @@ class AIJudge {
       throw error;
     }
   }
+  
+  /**
+   * Evaluate drawing using OpenAI GPT-4V
+   */
+  async evaluateWithOpenAI(canvasData, word) {
+    const response = await this.openai.chat.completions.create({
+      model: "gpt-4-vision-preview",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: this.generateEvaluationPrompt(word)
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: canvasData,
+                detail: "low" // Use low detail to reduce costs and improve speed
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 150,
+      temperature: 0.1 // Low temperature for consistent scoring
+    });
+    
+    return response.choices[0].message.content;
+  }
+  
+  /**
+   * Evaluate drawing using Google Gemini
+   */
+  async evaluateWithGemini(canvasData, word) {
+    // Convert base64 data URL to format Gemini expects
+    const base64Data = canvasData.replace(/^data:image\/[a-z]+;base64,/, '');
+    
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType: "image/png"
+      }
+    };
+    
+    const prompt = this.generateEvaluationPrompt(word);
+    
+    const result = await this.geminiModel.generateContent([prompt, imagePart]);
+    const response = await result.response;
+    return response.text();
+  }
 
   /**
    * Generate evaluation prompt for GPT-4V
    */
   generateEvaluationPrompt(word) {
-    return `You are judging a drawing in a multiplayer game. Rate this drawing of "${word}" on a scale of 1-100.
+    return `You are an AI judge for a multiplayer drawing game. Your job is to fairly evaluate this drawing of "${word}" on a scale of 1-100.
 
-Consider these criteria:
-1. Recognizability: How clearly does this represent "${word}"?
-2. Artistic effort: Is there detail and creativity?
-3. Accuracy: How well does it match the actual appearance of "${word}"?
+Scoring Guidelines:
+• 80-100: Excellent - Very clear, detailed, recognizable representation
+• 60-79: Good - Clearly recognizable with decent effort
+• 40-59: Average - Somewhat recognizable, basic effort
+• 20-39: Poor - Hard to recognize, minimal effort
+• 1-19: Very Poor - Unrecognizable or no real attempt
 
-Please respond in exactly this format:
-SCORE: [number from 1-100]
-FEEDBACK: [brief 1-2 sentence explanation of the score]
+Evaluation Criteria:
+1. How recognizable is this as "${word}"?
+2. What level of artistic effort and detail is shown?
+3. How accurately does it represent the real appearance of "${word}"?
 
-Be fair but critical. Average drawings should score 40-60. Only exceptional drawings deserve 80+.`;
+IMPORTANT: You must respond in this EXACT format:
+SCORE: [number]
+FEEDBACK: [your explanation]
+
+Example:
+SCORE: 73
+FEEDBACK: Clear drawing with good proportions and recognizable features.`;
   }
 
   /**
@@ -148,6 +228,7 @@ Be fair but critical. Average drawings should score 40-60. Only exceptional draw
     
     // Final fallback
     console.warn('⚠️ AI Judge: Could not parse score from response:', response);
+    console.warn('⚠️ AI Judge: Using fallback random score');
     return Math.floor(Math.random() * 40) + 30; // Random 30-70
   }
 
@@ -180,11 +261,9 @@ Be fair but critical. Average drawings should score 40-60. Only exceptional draw
       rank: 0
     }));
     
-    // Sort and rank
+    // Sort and rank with tie handling
     results.sort((a, b) => b.score - a.score);
-    results.forEach((result, index) => {
-      result.rank = index + 1;
-    });
+    this.assignRanksWithTies(results);
     
     return results;
   }
@@ -194,15 +273,22 @@ Be fair but critical. Average drawings should score 40-60. Only exceptional draw
    */
   async testConnection() {
     try {
-      const response = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: "Hello, this is a test." }],
-        max_tokens: 10
-      });
-      
-      return { success: true, message: "OpenAI connection successful" };
+      if (this.activeProvider === 'openai') {
+        const response = await this.openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: "Hello, this is a test." }],
+          max_tokens: 10
+        });
+        return { success: true, message: "OpenAI connection successful", provider: 'openai' };
+      } else if (this.activeProvider === 'gemini') {
+        const result = await this.geminiModel.generateContent("Hello, this is a test.");
+        const response = await result.response;
+        return { success: true, message: "Gemini connection successful", provider: 'gemini' };
+      } else {
+        return { success: false, message: "No AI provider configured", provider: 'mock' };
+      }
     } catch (error) {
-      return { success: false, message: error.message };
+      return { success: false, message: error.message, provider: this.activeProvider };
     }
   }
   /**
@@ -218,15 +304,81 @@ Be fair but critical. Average drawings should score 40-60. Only exceptional draw
       score: Math.floor(Math.random() * 40) + 60, // Random score between 60-100
       feedback: `Great drawing! ${this.getMockFeedback()}`,
       canvasData: submission.canvasData
-    })).sort((a, b) => b.score - a.score).map((result, index) => ({
-      ...result,
-      rank: index + 1
     }));
+    
+    // Sort and assign ranks with tie handling
+    results.sort((a, b) => b.score - a.score);
+    this.assignRanksWithTies(results);
+    
+    return results;
   }
   
   /**
    * Get random mock feedback
    */
+  /**
+   * Assign ranks with proper tie handling
+   * Players with the same score get the same rank
+   */
+  assignRanksWithTies(results) {
+    let currentRank = 1;
+    let previousScore = null;
+    let playersAtCurrentRank = 0;
+    
+    results.forEach((result, index) => {
+      if (previousScore !== null && result.score < previousScore) {
+        // Score decreased, update rank
+        currentRank += playersAtCurrentRank;
+        playersAtCurrentRank = 1;
+      } else if (previousScore === null || result.score === previousScore) {
+        // First player or tied score
+        playersAtCurrentRank++;
+      }
+      
+      result.rank = currentRank;
+      previousScore = result.score;
+    });
+    
+    // Log tie information
+    const tiedGroups = this.findTiedGroups(results);
+    if (tiedGroups.length > 0) {
+      console.log('🤝 Ties detected:');
+      tiedGroups.forEach(group => {
+        const playerNames = group.players.map(p => p.playerName).join(', ');
+        console.log(`   Rank ${group.rank}: ${playerNames} (${group.score} points)`);
+      });
+    }
+  }
+  
+  /**
+   * Find groups of tied players
+   */
+  findTiedGroups(results) {
+    const tiedGroups = [];
+    const scoreGroups = {};
+    
+    // Group players by score
+    results.forEach(result => {
+      if (!scoreGroups[result.score]) {
+        scoreGroups[result.score] = [];
+      }
+      scoreGroups[result.score].push(result);
+    });
+    
+    // Find groups with more than one player (ties)
+    Object.entries(scoreGroups).forEach(([score, players]) => {
+      if (players.length > 1) {
+        tiedGroups.push({
+          score: parseInt(score),
+          rank: players[0].rank,
+          players: players
+        });
+      }
+    });
+    
+    return tiedGroups;
+  }
+
   getMockFeedback() {
     const feedbacks = [
       "Nice use of colors and shapes!",

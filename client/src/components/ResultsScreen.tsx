@@ -26,22 +26,32 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
   const [selectedDrawing, setSelectedDrawing] = useState<GameResult | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [showJudgingErrorModal, setShowJudgingErrorModal] = useState(false);
+  const [showJudgingLoadingModal, setShowJudgingLoadingModal] = useState(false);
   
-  // Detect if judging failed
+  // Detect game phases
   const judgingFailed = gameState.gamePhase === 'judging-failed';
+  const isJudging = gameState.gamePhase === 'judging';
   const hasResults = gameState.results && gameState.results.length > 0;
 
-  // Animate results reveal
+  // Handle different phases and modals
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowResults(true);
       
+      // Show loading modal if currently judging
+      if (isJudging) {
+        setShowJudgingLoadingModal(true);
+        setShowJudgingErrorModal(false);
+      }
       // Show error modal if judging failed
-      if (judgingFailed) {
+      else if (judgingFailed) {
+        setShowJudgingLoadingModal(false);
         setShowJudgingErrorModal(true);
       }
       // Show winner celebration for successful results
       else if (hasResults) {
+        setShowJudgingLoadingModal(false);
+        setShowJudgingErrorModal(false);
         const winner = gameState.results.find(r => r.rank === 1);
         if (winner) {
           setTimeout(() => setShowCelebration(true), 1000);
@@ -51,7 +61,18 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [gameState.results, judgingFailed, hasResults]);
+  }, [gameState.results, gameState.gamePhase, judgingFailed, isJudging, hasResults]);
+  
+  // Reset modal state when component unmounts or game state changes significantly
+  useEffect(() => {
+    // Reset modal state when switching away from results screen
+    return () => {
+      setShowJudgingErrorModal(false);
+      setShowJudgingLoadingModal(false);
+      setShowCelebration(false);
+      setShowDrawingModal(false);
+    };
+  }, []);
 
   // Animate individual results
   useEffect(() => {
@@ -151,7 +172,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
               />
             </div>
             <h1 className="results-title">
-              🎨 {judgingFailed ? 'Game Complete!' : 'AI Judging Results!'}
+              🎨 {isJudging ? 'AI Judging in Progress...' : judgingFailed ? 'Game Complete!' : 'AI Judging Results!'}
             </h1>
             <p className="results-subtitle">
               The word was: <span className="chosen-word">"{gameState.chosenWord}"</span>
@@ -160,14 +181,22 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
 
           {/* Results Grid */}
           <div className="results-grid-container">
-            {hasResults && gameState.results.length > 3 && (
+            {((hasResults && gameState.results.length > 3) || (isJudging && gameState.playerCount > 3)) && (
               <div className="scroll-hint">
-                <span>← Scroll to see all results →</span>
+                <span>← Scroll to see all {isJudging ? 'drawings' : 'results'} →</span>
               </div>
             )}
             <div className="results-grid">
-              {hasResults && gameState.results
-                .sort((a, b) => a.rank - b.rank)
+              {/* Show results if available, or create placeholder cards during judging */}
+              {(hasResults ? gameState.results.sort((a, b) => a.rank - b.rank) : 
+                isJudging ? gameState.players?.map(player => ({
+                  playerId: player.id,
+                  playerName: player.name,
+                  canvasData: '', // Will be populated when drawings are available
+                  rank: 0,
+                  score: 0,
+                  feedback: ''
+                })) || [] : [])
                 .map((result, index) => (
                 <div
                   key={result.playerId}
@@ -182,7 +211,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                   <div className="result-card-inner">
                     
                     {/* Rank Badge - only show if judging succeeded */}
-                    {!judgingFailed && (
+                    {!judgingFailed && !isJudging && (
                       <div className="rank-badge" style={{ backgroundColor: getRankColor(result.rank) }}>
                         <span className="rank-icon">{getRankIcon(result.rank)}</span>
                       </div>
@@ -191,7 +220,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                     {/* Player Info */}
                     <div className="player-section">
                       <h3 className="player-name">{result.playerName}</h3>
-                      {!judgingFailed && (
+                      {!judgingFailed && !isJudging && (
                         <div className="score-section">
                           <div 
                             className="score-circle"
@@ -205,6 +234,14 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                             </span>
                             <span className="score-label">/ 100</span>
                           </div>
+                        </div>
+                      )}
+                      {isJudging && (
+                        <div className="judging-indicator">
+                          <div className="spinner-border spinner-border-sm text-primary" role="status">
+                            <span className="visually-hidden">Judging...</span>
+                          </div>
+                          <small className="text-muted ms-2">Being judged...</small>
                         </div>
                       )}
                     </div>
@@ -240,7 +277,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                     </div>
 
                     {/* AI Feedback - only show if judging succeeded */}
-                    {!judgingFailed && (
+                    {!judgingFailed && !isJudging && (
                       <div className="feedback-section">
                         <div className="feedback-bubble">
                           <div className="feedback-header">
@@ -251,6 +288,21 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                         </div>
                       </div>
                     )}
+                    
+                    {/* Judging placeholder */}
+                    {isJudging && (
+                      <div className="feedback-section">
+                        <div className="feedback-bubble bg-light">
+                          <div className="feedback-header">
+                            <span className="ai-icon">🤖</span>
+                            <span className="ai-label">AI Judge</span>
+                          </div>
+                          <p className="feedback-text text-muted">
+                            <em>Analyzing drawing...</em>
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                   </div>
                   </div>
@@ -258,13 +310,21 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="action-section">
+          {/* Action Buttons - Hide during judging */}
+          {!isJudging && (
+            <div className="action-section">
             <div className="action-buttons">
               {onPlayAgain && (
                 <Button
                   className="action-btn play-again-btn"
-                  onClick={onPlayAgain}
+                  onClick={() => {
+                    // Hide any open modals before playing again
+                    setShowJudgingErrorModal(false);
+                    setShowJudgingLoadingModal(false);
+                    setShowDrawingModal(false);
+                    setShowCelebration(false);
+                    onPlayAgain();
+                  }}
                   size="lg"
                 >
                   🔄 Play Again
@@ -272,29 +332,37 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
               )}
               <Button
                 className="action-btn new-game-btn"
-                onClick={onNewGame}
+                onClick={() => {
+                  // Hide any open modals before starting new game
+                  setShowJudgingErrorModal(false);
+                  setShowJudgingLoadingModal(false);
+                  setShowDrawingModal(false);
+                  setShowCelebration(false);
+                  onNewGame();
+                }}
                 size="lg"
               >
                 🏠 New Game
               </Button>
+              </div>
+              
+              {/* Game Stats */}
+              <div className="game-stats">
+                <div className="stat-item">
+                  <span className="stat-label">Players:</span>
+                  <span className="stat-value">{hasResults ? gameState.results.length : gameState.playerCount}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Word:</span>
+                  <span className="stat-value">"{gameState.chosenWord}"</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Room:</span>
+                  <span className="stat-value">{gameState.roomCode}</span>
+                </div>
+              </div>
             </div>
-            
-            {/* Game Stats */}
-            <div className="game-stats">
-              <div className="stat-item">
-                <span className="stat-label">Players:</span>
-                <span className="stat-value">{gameState.results.length}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Word:</span>
-                <span className="stat-value">"{gameState.chosenWord}"</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Room:</span>
-                <span className="stat-value">{gameState.roomCode}</span>
-              </div>
-            </div>
-          </div>
+          )}
 
         </div>
       </div>
@@ -380,6 +448,43 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
             Close
           </Button>
         </Modal.Footer>
+      </Modal>
+      
+      {/* AI Judging Loading Modal */}
+      <Modal 
+        show={showJudgingLoadingModal} 
+        onHide={() => {}} // Cannot be closed during judging
+        centered
+        className="judging-loading-modal"
+        backdrop="static" // Prevent closing by clicking outside
+        keyboard={false} // Prevent closing with ESC
+      >
+        <Modal.Header className="bg-primary text-white text-center">
+          <Modal.Title className="w-100 text-center">
+            <i className="fas fa-robot me-2"></i>
+            AI Judge at Work
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center py-4">
+          <div className="d-flex flex-column align-items-center">
+            <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+            <h5 className="mb-3">Analyzing your masterpieces...</h5>
+            <p className="text-muted mb-3">
+              Our AI judge is carefully evaluating each drawing for "{gameState.chosenWord}".
+            </p>
+            <div className="progress w-100 mb-3" style={{height: '8px'}}>
+              <div 
+                className="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                style={{width: '100%'}}
+              ></div>
+            </div>
+            <small className="text-muted">
+              🎨 Considering creativity, accuracy, and recognizability...
+            </small>
+          </div>
+        </Modal.Body>
       </Modal>
 
     </div>

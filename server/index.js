@@ -518,12 +518,98 @@ io.on('connection', (socket) => {
   // Disconnect handling
   socket.on('disconnect', () => {
     console.log(`Player disconnected: ${socket.id}`);
-    gameManager.handlePlayerDisconnect(socket.id, (roomCode, gameState) => {
+    gameManager.handlePlayerDisconnect(socket.id, async (roomCode, gameState, wasHost, hostLeft) => {
       if (roomCode && gameState) {
         io.to(roomCode).emit('player-left', { 
           playerId: socket.id,
           gameState 
         });
+        
+        // Debug logging
+        if (wasHost) {
+          console.log(`🔄 [SERVER] Host disconnected: wasHost=${wasHost}, gameState.hostLeft=${gameState?.hostLeft}, roomCode=${roomCode}`);
+        }
+        
+        // If the host left and there are players waiting for play again, create new lobby for them
+        if (wasHost && gameState?.hostLeft) {
+          console.log(`🔄 [SERVER] Host disconnected, creating new lobby for waiting players in room ${roomCode}`);
+          
+          // Get the room to access playAgainRequests
+          const room = gameManager.getRoom(roomCode);
+          console.log(`🔄 [SERVER] Room found:`, !!room);
+          console.log(`🔄 [SERVER] PlayAgainRequests:`, room?.playAgainRequests?.size || 0);
+          
+          if (room?.playAgainRequests && room.playAgainRequests.size > 0) {
+            console.log(`🔄 [SERVER] Creating new lobby for ${room.playAgainRequests.size} waiting players`);
+            
+            try {
+              // Get all waiting players
+              const waitingPlayers = Array.from(room.playAgainRequests).map(playerId => {
+                const player = room.players.get(playerId);
+                return player ? { id: playerId, name: player.name } : null;
+              }).filter(Boolean);
+              
+              if (waitingPlayers.length > 0) {
+                // Create new lobby with first player as host
+                const newHost = waitingPlayers[0];
+                const result = await gameManager.createRoom(newHost.id, newHost.name);
+                const newRoomCode = result.roomCode;
+                
+                console.log(`🔄 [SERVER] Created new lobby ${newRoomCode} with host ${newHost.name}`);
+                
+                // Move all waiting players to new lobby
+                const playersJoined = [{ id: newHost.id, name: newHost.name, isHost: true }];
+                
+                // Add other players to the new room
+                for (let i = 1; i < waitingPlayers.length; i++) {
+                  const player = waitingPlayers[i];
+                  await gameManager.joinRoom(newRoomCode, player.id, player.name);
+                  playersJoined.push({ id: player.id, name: player.name, isHost: false });
+                  console.log(`🔄 [SERVER] Added ${player.name} to new lobby ${newRoomCode}`);
+                }
+                
+                // Get updated game state after all players have been added
+                const newRoom = gameManager.getRoom(newRoomCode);
+                const updatedGameState = newRoom ? newRoom.getGameState() : result.gameState;
+                
+                console.log(`🔄 [SERVER] Updated game state has ${updatedGameState.players.length} players:`, 
+                  updatedGameState.players.map(p => p.name));
+                
+                // Notify all players about the new lobby
+                for (const player of waitingPlayers) {
+                  const playerSocket = io.sockets.sockets.get(player.id);
+                  if (playerSocket && playerSocket.connected) {
+                    // Move player to new room
+                    playerSocket.leave(roomCode);
+                    playerSocket.join(newRoomCode);
+                    
+                    // Send lobby created event with updated game state
+                    playerSocket.emit('play-again-lobby-created', {
+                      newRoomCode,
+                      gameState: updatedGameState,
+                      newHost: { id: newHost.id, name: newHost.name }
+                    });
+                    
+                    console.log(`🔄 [SERVER] Notified ${player.name} about new lobby ${newRoomCode}`);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`🔄 [SERVER] Failed to create new lobby for waiting players:`, error);
+              
+              // Fallback: Send host left notification
+              io.to(roomCode).emit('play-again-waiting', {
+                waiting: true,
+                waitingForHost: true,
+                hostLeft: true,
+                message: gameState.hostLeftMessage || 'The host has left the game.',
+                playersReady: room?.playAgainRequests?.size || 0,
+                totalPlayers: gameState.playerCount,
+                playersNeeded: 1
+              });
+            }
+          }
+        }
       }
     });
   });
