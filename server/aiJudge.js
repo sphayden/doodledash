@@ -104,15 +104,8 @@ class AIJudge {
     } catch (error) {
       console.error(`❌ AI Judge: Failed to evaluate drawing for ${playerName}:`, error);
       
-      // Fallback scoring
-      return {
-        playerId,
-        playerName,
-        score: Math.floor(Math.random() * 50) + 25, // Random score 25-75
-        feedback: "Unable to evaluate drawing due to technical issues.",
-        canvasData,
-        rank: 0
-      };
+      // Don't return fake results - rethrow the error to be handled at a higher level
+      throw error;
     }
   }
 

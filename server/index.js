@@ -89,10 +89,25 @@ gameManager.setTimerCallbacks({
     // Get the room and set it to a failed judging state
     const room = gameManager.rooms.get(roomCode);
     if (room) {
-      room.setJudgingFailed(error.message);
+      // Sanitize error message to avoid exposing API keys or sensitive info
+      let sanitizedMessage = error.message || error;
+      if (sanitizedMessage.includes('API key')) {
+        sanitizedMessage = 'Invalid or missing API key. Please check the server configuration.';
+      } else if (sanitizedMessage.includes('401') || sanitizedMessage.includes('authentication')) {
+        sanitizedMessage = 'Authentication failed. Please check the API configuration.';
+      } else if (sanitizedMessage.includes('quota') || sanitizedMessage.includes('billing')) {
+        sanitizedMessage = 'API quota exceeded or billing issue. Please check the account status.';
+      } else {
+        sanitizedMessage = 'AI service temporarily unavailable. Please try again later.';
+      }
+      
+      room.setJudgingFailed(`AI judging failed: ${sanitizedMessage}`);
+      const gameState = room.getGameState();
+      console.log(`🎨 TIMER PATH: Sending ${gameState.results.length} drawing results to client`);
+      console.log(`🛠️ Timer results:`, gameState.results.map(r => ({name: r.playerName, hasCanvas: !!r.canvasData})));
       io.to(roomCode).emit('judging-failed', { 
-        gameState: room.getGameState(),
-        error: error.message 
+        gameState: gameState,
+        error: gameState.judgingError 
       });
     } else {
       io.to(roomCode).emit('error', { message: 'AI judging failed' });
@@ -362,12 +377,37 @@ io.on('connection', (socket) => {
         // Start AI judging (async)
         gameManager.startAIJudging(roomCode)
           .then((finalGameState) => {
-            io.to(roomCode).emit('judging-complete', { gameState: finalGameState });
-            console.log(`AI judging complete in room: ${roomCode}`);
+            console.log(`🔍 DEBUG: Final game phase is: ${finalGameState.gamePhase}`);
+            // Check if judging failed
+            if (finalGameState.gamePhase === 'judging-failed') {
+              console.log(`❌ AI judging failed in room: ${roomCode}: ${finalGameState.judgingError}`);
+              console.log(`🎨 DIRECT PATH: Sending ${finalGameState.results.length} drawing results to client`);
+              console.log(`🛠️ Game state results:`, finalGameState.results.map(r => ({name: r.playerName, hasCanvas: !!r.canvasData})));
+              io.to(roomCode).emit('judging-failed', { 
+                gameState: finalGameState,
+                error: finalGameState.judgingError 
+              });
+            } else {
+              io.to(roomCode).emit('judging-complete', { gameState: finalGameState });
+              console.log(`✅ AI judging complete in room: ${roomCode}`);
+            }
           })
           .catch((error) => {
             console.error('AI judging error:', error);
-            io.to(roomCode).emit('error', { message: 'AI judging failed' });
+            
+            // Get the room and check if it's in judging-failed state
+            const room = gameManager.rooms.get(roomCode);
+            if (room && room.gamePhase === 'judging-failed') {
+              const gameState = room.getGameState();
+              console.log(`🎨 CATCH PATH: Sending ${gameState.results.length} drawing results to client`);
+              console.log(`🛠️ Catch results:`, gameState.results.map(r => ({name: r.playerName, hasCanvas: !!r.canvasData})));
+              io.to(roomCode).emit('judging-failed', { 
+                gameState: gameState,
+                error: gameState.judgingError 
+              });
+            } else {
+              io.to(roomCode).emit('error', { message: 'AI judging failed' });
+            }
           });
       }
     } catch (error) {
@@ -390,6 +430,14 @@ io.on('connection', (socket) => {
     try {
       const { roomCode } = data;
       console.log(`🔄 Play again request from ${socket.id} in room ${roomCode}`);
+      
+      // Check if room exists and its current phase
+      const room = gameManager.rooms.get(roomCode);
+      if (room) {
+        console.log(`🔄 Room ${roomCode} exists, current phase: ${room.gamePhase}`);
+      } else {
+        console.log(`🔄 Room ${roomCode} does not exist!`);
+      }
       
       const result = await gameManager.handlePlayAgain(roomCode, socket.id);
       

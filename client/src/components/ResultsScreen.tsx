@@ -25,14 +25,23 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
   const [showDrawingModal, setShowDrawingModal] = useState(false);
   const [selectedDrawing, setSelectedDrawing] = useState<GameResult | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [showJudgingErrorModal, setShowJudgingErrorModal] = useState(false);
+  
+  // Detect if judging failed
+  const judgingFailed = gameState.gamePhase === 'judging-failed';
+  const hasResults = gameState.results && gameState.results.length > 0;
 
   // Animate results reveal
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowResults(true);
       
-      // Show winner celebration
-      if (gameState.results && gameState.results.length > 0) {
+      // Show error modal if judging failed
+      if (judgingFailed) {
+        setShowJudgingErrorModal(true);
+      }
+      // Show winner celebration for successful results
+      else if (hasResults) {
         const winner = gameState.results.find(r => r.rank === 1);
         if (winner) {
           setTimeout(() => setShowCelebration(true), 1000);
@@ -42,7 +51,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [gameState.results]);
+  }, [gameState.results, judgingFailed, hasResults]);
 
   // Animate individual results
   useEffect(() => {
@@ -88,7 +97,8 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
     return '#dc3545'; // Red
   };
 
-  if (!gameState.results || gameState.results.length === 0) {
+  // For judging failed, we want to show the drawings even without results
+  if (!hasResults && !judgingFailed) {
     return (
       <div className="results-screen">
         <AnimatedBackground />
@@ -140,7 +150,9 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                 }}
               />
             </div>
-            <h1 className="results-title">🎨 AI Judging Results!</h1>
+            <h1 className="results-title">
+              🎨 {judgingFailed ? 'Game Complete!' : 'AI Judging Results!'}
+            </h1>
             <p className="results-subtitle">
               The word was: <span className="chosen-word">"{gameState.chosenWord}"</span>
             </p>
@@ -148,20 +160,20 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
 
           {/* Results Grid */}
           <div className="results-grid-container">
-            {gameState.results && gameState.results.length > 3 && (
+            {hasResults && gameState.results.length > 3 && (
               <div className="scroll-hint">
                 <span>← Scroll to see all results →</span>
               </div>
             )}
             <div className="results-grid">
-              {gameState.results
+              {hasResults && gameState.results
                 .sort((a, b) => a.rank - b.rank)
                 .map((result, index) => (
                 <div
                   key={result.playerId}
                   className={`result-card ${
                     showResults && index <= currentResultIndex ? 'visible' : ''
-                  } ${result.rank === 1 ? 'winner' : ''}`}
+                  } ${!judgingFailed && result.rank === 1 ? 'winner' : ''}`}
                   style={{ 
                     animationDelay: `${index * 0.3}s`,
                     '--rank-color': getRankColor(result.rank)
@@ -169,28 +181,32 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                 >
                   <div className="result-card-inner">
                     
-                    {/* Rank Badge */}
-                    <div className="rank-badge" style={{ backgroundColor: getRankColor(result.rank) }}>
-                      <span className="rank-icon">{getRankIcon(result.rank)}</span>
-                    </div>
+                    {/* Rank Badge - only show if judging succeeded */}
+                    {!judgingFailed && (
+                      <div className="rank-badge" style={{ backgroundColor: getRankColor(result.rank) }}>
+                        <span className="rank-icon">{getRankIcon(result.rank)}</span>
+                      </div>
+                    )}
 
                     {/* Player Info */}
                     <div className="player-section">
                       <h3 className="player-name">{result.playerName}</h3>
-                      <div className="score-section">
-                        <div 
-                          className="score-circle"
-                          style={{ borderColor: getScoreColor(result.score) }}
-                        >
-                          <span 
-                            className="score-number"
-                            style={{ color: getScoreColor(result.score) }}
+                      {!judgingFailed && (
+                        <div className="score-section">
+                          <div 
+                            className="score-circle"
+                            style={{ borderColor: getScoreColor(result.score) }}
                           >
-                            {result.score}
-                          </span>
-                          <span className="score-label">/ 100</span>
+                            <span 
+                              className="score-number"
+                              style={{ color: getScoreColor(result.score) }}
+                            >
+                              {result.score}
+                            </span>
+                            <span className="score-label">/ 100</span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* Drawing Preview */}
@@ -223,16 +239,18 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                       </div>
                     </div>
 
-                    {/* AI Feedback */}
-                    <div className="feedback-section">
-                      <div className="feedback-bubble">
-                        <div className="feedback-header">
-                          <span className="ai-icon">🤖</span>
-                          <span className="ai-label">AI Judge</span>
+                    {/* AI Feedback - only show if judging succeeded */}
+                    {!judgingFailed && (
+                      <div className="feedback-section">
+                        <div className="feedback-bubble">
+                          <div className="feedback-header">
+                            <span className="ai-icon">🤖</span>
+                            <span className="ai-label">AI Judge</span>
+                          </div>
+                          <p className="feedback-text">{result.feedback}</p>
                         </div>
-                        <p className="feedback-text">{result.feedback}</p>
                       </div>
-                    </div>
+                    )}
 
                   </div>
                   </div>
@@ -331,6 +349,37 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
             </>
           )}
         </Modal.Body>
+      </Modal>
+
+      {/* AI Judging Error Modal */}
+      <Modal 
+        show={showJudgingErrorModal} 
+        onHide={() => setShowJudgingErrorModal(false)}
+        centered
+        className="judging-error-modal"
+      >
+        <Modal.Header closeButton className="bg-warning text-dark">
+          <Modal.Title>
+            <i className="fas fa-exclamation-triangle me-2"></i>
+            AI Judging Failed
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-3">
+            Unfortunately, the AI judge couldn't evaluate the drawings due to a technical issue.
+          </p>
+          <p className="mb-3">
+            <strong>Error:</strong> {gameState.judgingError || 'Unknown error'}
+          </p>
+          <p className="mb-0">
+            You can still view all the amazing artwork and use the "New Game" or "Play Again" buttons below!
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowJudgingErrorModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
       </Modal>
 
     </div>

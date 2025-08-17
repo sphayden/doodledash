@@ -1092,7 +1092,7 @@ export class SocketGameManager implements GameManager {
       );
     }
 
-    if (this.gameState?.gamePhase !== 'results') {
+    if (this.gameState?.gamePhase !== 'results' && this.gameState?.gamePhase !== 'judging-failed') {
       throw createGameError(
         GameErrorCode.INVALID_GAME_STATE,
         'Can only play again from results screen'

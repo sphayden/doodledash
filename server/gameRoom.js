@@ -361,7 +361,22 @@ class GameRoom {
   setJudgingFailed(errorMessage) {
     this.gamePhase = 'judging-failed';
     this.judgingError = errorMessage;
-    this.aiResults = []; // No results due to failure
+    
+    // Create basic result objects with drawings but no scores/ranks
+    this.aiResults = [];
+    for (const [playerId, canvasData] of this.drawings.entries()) {
+      const player = this.players.get(playerId);
+      if (player) {
+        this.aiResults.push({
+          playerId,
+          playerName: player.name,
+          canvasData,
+          rank: 0, // No ranking when judging fails
+          score: 0, // No score when judging fails
+          feedback: '' // No feedback when judging fails
+        });
+      }
+    }
   }
 
   /**
@@ -425,7 +440,10 @@ class GameRoom {
       submittedDrawings: this.drawings.size,
       
       // Results data
-      results: this.aiResults || []
+      results: this.aiResults || [],
+      
+      // Error data (only present when judging fails)
+      judgingError: this.judgingError
     };
   }
 

@@ -260,8 +260,26 @@ class GameManager {
       throw new Error('Room not found');
     }
     
-    const results = await room.judgeDrawings();
-    room.setResults(results);
+    try {
+      const results = await room.judgeDrawings();
+      room.setResults(results);
+    } catch (error) {
+      console.error(`❌ AI Judging failed for room ${roomCode}:`, error.message);
+      
+      // Sanitize error message to avoid exposing API keys or sensitive info
+      let sanitizedMessage = error.message;
+      if (error.message.includes('API key')) {
+        sanitizedMessage = 'Invalid or missing API key. Please check the server configuration.';
+      } else if (error.message.includes('401') || error.message.includes('authentication')) {
+        sanitizedMessage = 'Authentication failed. Please check the API configuration.';
+      } else if (error.message.includes('quota') || error.message.includes('billing')) {
+        sanitizedMessage = 'API quota exceeded or billing issue. Please check the account status.';
+      } else {
+        sanitizedMessage = 'AI service temporarily unavailable. Please try again later.';
+      }
+      
+      room.setJudgingFailed(`AI judging failed: ${sanitizedMessage}`);
+    }
     
     return room.getGameState();
   }
@@ -284,8 +302,26 @@ class GameManager {
     room.removePlayer(playerId);
     this.playerRooms.delete(playerId);
     
-    // If room is empty or host left, clean up
-    if (room.isEmpty() || wasHost) {
+    // If room is empty, clean up immediately
+    if (room.isEmpty()) {
+      this.cleanupRoom(roomCode);
+      callback(roomCode, null); // Signal room closed
+    }
+    // If host left but game is finished, delay cleanup to allow play-again
+    else if (wasHost && (room.gamePhase === 'results' || room.gamePhase === 'judging-failed')) {
+      console.log(`🔄 Host left finished game ${roomCode}, delaying cleanup for play-again`);
+      // Set a timeout to cleanup after 2 minutes if no play-again activity
+      setTimeout(() => {
+        const currentRoom = this.rooms.get(roomCode);
+        if (currentRoom && !currentRoom.playAgainRequests) {
+          console.log(`🔄 Auto-cleaning up abandoned room ${roomCode}`);
+          this.cleanupRoom(roomCode);
+        }
+      }, 120000); // 2 minutes
+      callback(roomCode, room.getGameState());
+    }
+    // If host left during active game, clean up immediately
+    else if (wasHost) {
       this.cleanupRoom(roomCode);
       callback(roomCode, null); // Signal room closed
     } else {
@@ -305,7 +341,7 @@ class GameManager {
       throw new Error('Room not found');
     }
     
-    if (room.gamePhase !== 'results') {
+    if (room.gamePhase !== 'results' && room.gamePhase !== 'judging-failed') {
       console.error(`🔄 [MANAGER] Room ${roomCode} not in results phase, current phase: ${room.gamePhase}`);
       throw new Error('Can only play again from results screen');
     }
