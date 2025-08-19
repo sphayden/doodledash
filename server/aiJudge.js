@@ -61,10 +61,8 @@ class AIJudge {
     }
     
     try {
-      // Evaluate each drawing
-      const evaluations = await Promise.all(
-        drawingSubmissions.map(submission => this.evaluateDrawing(submission))
-      );
+      // Evaluate all drawings together for relative comparison
+      const evaluations = await this.evaluateAllDrawingsTogether(drawingSubmissions);
       
       // Sort by score (highest first)
       evaluations.sort((a, b) => b.score - a.score);
@@ -127,6 +125,44 @@ class AIJudge {
       throw error;
     }
   }
+
+  /**
+   * Evaluate all drawings together for relative comparison
+   */
+  async evaluateAllDrawingsTogether(drawingSubmissions) {
+    const { word } = drawingSubmissions[0];
+    
+    try {
+      let aiResponse;
+      
+      if (this.activeProvider === 'openai') {
+        aiResponse = await this.evaluateAllWithOpenAI(drawingSubmissions, word);
+      } else if (this.activeProvider === 'gemini') {
+        aiResponse = await this.evaluateAllWithGemini(drawingSubmissions, word);
+      } else {
+        throw new Error('No AI provider available');
+      }
+      
+      // Debug: Log the raw AI response
+      console.log(`🔍 [DEBUG] Raw batch AI response:`, aiResponse);
+      
+      // Parse the batch response into individual results
+      const evaluations = this.parseBatchResponse(aiResponse, drawingSubmissions);
+      
+      return evaluations;
+      
+    } catch (error) {
+      console.error(`❌ AI Judge: Failed to evaluate drawings in batch:`, error);
+      console.log('🔄 AI Judge: Falling back to individual evaluation');
+      
+      // Fallback to individual evaluation if batch fails
+      const evaluations = await Promise.all(
+        drawingSubmissions.map(submission => this.evaluateDrawing(submission))
+      );
+      
+      return evaluations;
+    }
+  }
   
   /**
    * Evaluate drawing using OpenAI GPT-4V
@@ -153,7 +189,7 @@ class AIJudge {
         }
       ],
       max_tokens: 150,
-      temperature: 0.1 // Low temperature for consistent scoring
+      temperature: 0.3 // Moderate temperature for more varied scoring
     });
     
     return response.choices[0].message.content;
@@ -181,31 +217,203 @@ class AIJudge {
   }
 
   /**
+   * Evaluate all drawings with OpenAI in a single request
+   */
+  async evaluateAllWithOpenAI(drawingSubmissions, word) {
+    const content = [
+      {
+        type: "text",
+        text: this.generateBatchEvaluationPrompt(word, drawingSubmissions)
+      }
+    ];
+
+    // Add all images to the content array
+    drawingSubmissions.forEach((submission, index) => {
+      content.push({
+        type: "image_url",
+        image_url: {
+          url: submission.canvasData,
+          detail: "low"
+        }
+      });
+    });
+
+    const response = await this.openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [{
+        role: "user",
+        content: content
+      }],
+      max_tokens: 800, // Increased for multiple evaluations
+      temperature: 0.3
+    });
+    
+    return response.choices[0].message.content;
+  }
+
+  /**
+   * Evaluate all drawings with Gemini in a single request
+   */
+  async evaluateAllWithGemini(drawingSubmissions, word) {
+    const prompt = this.generateBatchEvaluationPrompt(word, drawingSubmissions);
+    const contentParts = [prompt];
+
+    // Add all images
+    drawingSubmissions.forEach((submission) => {
+      const base64Data = submission.canvasData.replace(/^data:image\/[a-z]+;base64,/, '');
+      contentParts.push({
+        inlineData: {
+          data: base64Data,
+          mimeType: "image/png"
+        }
+      });
+    });
+
+    const result = await this.geminiModel.generateContent(contentParts);
+    const response = await result.response;
+    return response.text();
+  }
+
+  /**
    * Generate evaluation prompt for GPT-4V
    */
   generateEvaluationPrompt(word) {
     return `You are an AI judge for a multiplayer drawing game. Your job is to fairly evaluate this drawing of "${word}" on a scale of 1-100.
 
-Scoring Guidelines:
-• 80-100: Excellent - Very clear, detailed, recognizable representation
-• 60-79: Good - Clearly recognizable with decent effort
-• 40-59: Average - Somewhat recognizable, basic effort
-• 20-39: Poor - Hard to recognize, minimal effort
-• 1-19: Very Poor - Unrecognizable or no real attempt
+CRITICAL SCORING INSTRUCTIONS:
+- Use the FULL range from 1-100, being precise in your evaluation
+- Consider subtle differences between drawings - similar quality can have similar scores
+- AVOID multiples of 5 (70, 75, 80, 85, 90) - use fluid scores like 67, 73, 84, 91, 88
+- Score based purely on the drawing's merit relative to the word "${word}"
+- If two drawings are truly similar quality, similar scores are appropriate
 
-Evaluation Criteria:
-1. How recognizable is this as "${word}"?
-2. What level of artistic effort and detail is shown?
-3. How accurately does it represent the real appearance of "${word}"?
+Detailed Scoring Criteria:
+• 90-100: Exceptional - Professional quality, highly detailed, instantly recognizable, creative flair
+• 80-89: Very Good - Clear representation, good detail, recognizable with minor flaws
+• 70-79: Good - Recognizable with decent effort, some detail present
+• 60-69: Above Average - Somewhat recognizable, basic effort shown
+• 50-59: Average - Minimally recognizable, limited effort or detail
+• 40-49: Below Average - Hard to identify, very basic attempt
+• 30-39: Poor - Barely resembles the word, minimal effort
+• 20-29: Very Poor - Almost unrecognizable, very little effort
+• 10-19: Extremely Poor - No clear attempt to draw the word
+• 1-9: No Effort - Scribbles, blank, or completely unrelated
+
+Evaluation Focus:
+1. Immediate recognizability as "${word}"
+2. Artistic effort and attention to detail
+3. Accuracy to real-world appearance
+4. Creative interpretation and style
+5. Overall execution quality
 
 IMPORTANT: You must respond in this EXACT format:
-SCORE: [number]
+SCORE: [specific number 1-100]
 FEEDBACK: [your explanation]
 
 Example:
 SCORE: 73
 FEEDBACK: Clear drawing with good proportions and recognizable features.
 Keep feedback short and concise. Should be one sentence.`;
+  }
+
+  /**
+   * Generate batch evaluation prompt for comparing multiple drawings
+   */
+  generateBatchEvaluationPrompt(word, drawingSubmissions) {
+    const playerList = drawingSubmissions.map((submission, index) => 
+      `Drawing ${index + 1}: ${submission.playerName}`
+    ).join('\n');
+
+    return `You are an AI judge for a multiplayer drawing game. You will see ${drawingSubmissions.length} drawings of "${word}" and must evaluate and rank them relative to each other.
+
+${playerList}
+
+CRITICAL SCORING INSTRUCTIONS:
+- Score each drawing from 1-100 based on how well it represents "${word}"
+- Compare drawings relative to each other - better drawings should get higher scores
+- AVOID multiples of 5 (70, 75, 80, 85, 90) - use fluid scores like 67, 73, 84, 91, 88
+- Use the full scoring range and create meaningful differences between drawings
+- Avoid clustering scores - spread them out naturally based on quality differences
+- Consider: recognizability, artistic effort, accuracy, creativity, and execution
+
+Scoring Guidelines:
+• 90-100: Exceptional quality, instantly recognizable, detailed
+• 80-89: Very good representation, clear and well-executed
+• 70-79: Good drawing, recognizable with decent effort
+• 60-69: Above average, somewhat recognizable
+• 50-59: Average attempt, basic recognizability
+• 40-49: Below average, hard to recognize
+• 30-39: Poor attempt, barely resembles the word
+• 20-29: Very poor, almost unrecognizable
+• 10-19: Minimal effort, no clear attempt
+• 1-9: No real effort or completely unrelated
+
+IMPORTANT: Respond with evaluations for each drawing in this EXACT format:
+
+DRAWING 1 - ${drawingSubmissions[0]?.playerName}:
+SCORE: [number]
+FEEDBACK: [one sentence]
+
+DRAWING 2 - ${drawingSubmissions[1]?.playerName}:
+SCORE: [number]  
+FEEDBACK: [one sentence]
+
+${drawingSubmissions.slice(2).map((submission, index) => 
+  `DRAWING ${index + 3} - ${submission.playerName}:\nSCORE: [number]\nFEEDBACK: [one sentence]`
+).join('\n\n')}
+
+Evaluate each drawing thoughtfully and provide varied, fair scores that reflect their relative quality.`;
+  }
+
+  /**
+   * Parse batch response into individual results
+   */
+  parseBatchResponse(response, drawingSubmissions) {
+    const evaluations = [];
+    
+    // Split response into sections for each drawing
+    const drawingMatches = response.match(/DRAWING\s+(\d+)\s*-\s*([^:]+):\s*SCORE:\s*(\d+)\s*FEEDBACK:\s*([^\n]+)/gi);
+    
+    if (!drawingMatches) {
+      console.warn('⚠️ AI Judge: Could not parse batch response, falling back to individual evaluation');
+      throw new Error('Failed to parse batch response');
+    }
+    
+    drawingMatches.forEach((match, index) => {
+      const detailMatch = match.match(/DRAWING\s+(\d+)\s*-\s*([^:]+):\s*SCORE:\s*(\d+)\s*FEEDBACK:\s*(.+)/i);
+      
+      if (detailMatch && index < drawingSubmissions.length) {
+        const drawingNum = parseInt(detailMatch[1]) - 1; // Convert to 0-based index
+        const playerName = detailMatch[2].trim();
+        const score = Math.max(1, Math.min(100, parseInt(detailMatch[3])));
+        const feedback = detailMatch[4].trim();
+        
+        // Find matching submission by player name or use index
+        let submission = drawingSubmissions.find(s => s.playerName === playerName);
+        if (!submission && drawingNum >= 0 && drawingNum < drawingSubmissions.length) {
+          submission = drawingSubmissions[drawingNum];
+        }
+        
+        if (submission) {
+          evaluations.push({
+            playerId: submission.playerId,
+            playerName: submission.playerName,
+            score: score,
+            feedback: `${this.activeProvider === 'openai' ? 'OpenAI' : this.activeProvider === 'gemini' ? 'Gemini' : 'AI'} says - ${feedback}`,
+            canvasData: submission.canvasData,
+            rank: 0 // Will be set after sorting
+          });
+        }
+      }
+    });
+    
+    // If we couldn't parse enough results, throw error to fall back
+    if (evaluations.length !== drawingSubmissions.length) {
+      console.warn(`⚠️ AI Judge: Parsed ${evaluations.length} results but expected ${drawingSubmissions.length}`);
+      throw new Error('Incomplete batch parsing');
+    }
+    
+    return evaluations;
   }
 
   /**
