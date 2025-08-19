@@ -38,9 +38,9 @@ class AIJudge {
     if (this.aiProvider === 'openai' && this.hasOpenAI) return 'openai';
     if (this.aiProvider === 'gemini' && this.hasGemini) return 'gemini';
     
-    // Auto selection (prefer Gemini for cost efficiency)
-    if (this.hasGemini) return 'gemini';
+    // Auto selection (prefer OpenAI for better reliability)
     if (this.hasOpenAI) return 'openai';
+    if (this.hasGemini) return 'gemini';
     
     return 'mock';
   }
@@ -107,7 +107,7 @@ class AIJudge {
       console.log(`🔍 [DEBUG] Raw AI response for ${playerName}:`, aiResponse);
       
       const score = this.parseScore(aiResponse);
-      const feedback = this.parseFeedback(aiResponse);
+      const feedback = this.parseFeedback(aiResponse, this.activeProvider);
       
       console.log(`🔍 [DEBUG] Parsed score for ${playerName}: ${score}`);
       
@@ -133,7 +133,7 @@ class AIJudge {
    */
   async evaluateWithOpenAI(canvasData, word) {
     const response = await this.openai.chat.completions.create({
-      model: "gpt-4-vision-preview",
+      model: "gpt-4o",
       messages: [
         {
           role: "user",
@@ -204,7 +204,8 @@ FEEDBACK: [your explanation]
 
 Example:
 SCORE: 73
-FEEDBACK: Clear drawing with good proportions and recognizable features.`;
+FEEDBACK: Clear drawing with good proportions and recognizable features.
+Keep feedback short and concise. Should be one sentence.`;
   }
 
   /**
@@ -235,15 +236,20 @@ FEEDBACK: Clear drawing with good proportions and recognizable features.`;
   /**
    * Parse feedback from AI response
    */
-  parseFeedback(response) {
+  parseFeedback(response, provider = 'AI') {
+    let feedback = '';
     const feedbackMatch = response.match(/FEEDBACK:\s*(.+)/i);
     if (feedbackMatch) {
-      return feedbackMatch[1].trim();
+      feedback = feedbackMatch[1].trim();
+    } else {
+      // If no explicit feedback found, use the whole response (truncated)
+      const cleanResponse = response.replace(/SCORE:\s*\d+/i, '').trim();
+      feedback = cleanResponse.slice(0, 100) + (cleanResponse.length > 100 ? '...' : '');
     }
     
-    // If no explicit feedback found, use the whole response (truncated)
-    const cleanResponse = response.replace(/SCORE:\s*\d+/i, '').trim();
-    return cleanResponse.slice(0, 100) + (cleanResponse.length > 100 ? '...' : '');
+    // Add provider prefix
+    const providerName = provider === 'openai' ? 'OpenAI' : provider === 'gemini' ? 'Gemini' : 'AI';
+    return `${providerName} says - ${feedback}`;
   }
 
   /**
@@ -256,7 +262,7 @@ FEEDBACK: Clear drawing with good proportions and recognizable features.`;
       playerId: submission.playerId,
       playerName: submission.playerName,
       score: Math.floor(Math.random() * 60) + 20, // Random 20-80
-      feedback: "Technical difficulties prevented AI evaluation. Score is randomly assigned.",
+      feedback: "Fallback AI says - Technical difficulties prevented AI evaluation. Score is randomly assigned.",
       canvasData: submission.canvasData,
       rank: 0
     }));
@@ -302,7 +308,7 @@ FEEDBACK: Clear drawing with good proportions and recognizable features.`;
       playerName: submission.playerName,
       rank: index + 1,
       score: Math.floor(Math.random() * 40) + 60, // Random score between 60-100
-      feedback: `Great drawing! ${this.getMockFeedback()}`,
+      feedback: `Mock AI says - Great drawing! ${this.getMockFeedback()}`,
       canvasData: submission.canvasData
     }));
     
