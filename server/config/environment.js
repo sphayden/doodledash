@@ -52,7 +52,7 @@ const environmentConfigs = {
     maxRooms: parseInt(process.env.MAX_ROOMS) || 100,
     maxPlayersPerRoom: parseInt(process.env.MAX_PLAYERS_PER_ROOM) || 8,
     roomCleanupInterval: parseInt(process.env.ROOM_CLEANUP_INTERVAL) || 300000, // 5 minutes
-    drawingTimeLimit: parseInt(process.env.DRAWING_TIME_LIMIT) || 60,
+    drawingTimeLimit: parseInt(process.env.DRAWING_TIME_LIMIT) || 120,
     votingTimeLimit: parseInt(process.env.VOTING_TIME_LIMIT) || 30,
     
     // AI Configuration
@@ -107,7 +107,7 @@ const environmentConfigs = {
     maxRooms: parseInt(process.env.MAX_ROOMS) || 500,
     maxPlayersPerRoom: parseInt(process.env.MAX_PLAYERS_PER_ROOM) || 8,
     roomCleanupInterval: parseInt(process.env.ROOM_CLEANUP_INTERVAL) || 180000, // 3 minutes
-    drawingTimeLimit: parseInt(process.env.DRAWING_TIME_LIMIT) || 60,
+    drawingTimeLimit: parseInt(process.env.DRAWING_TIME_LIMIT) || 120,
     votingTimeLimit: parseInt(process.env.VOTING_TIME_LIMIT) || 30,
     
     // AI Configuration
@@ -162,7 +162,7 @@ const environmentConfigs = {
     maxRooms: parseInt(process.env.MAX_ROOMS) || 1000,
     maxPlayersPerRoom: parseInt(process.env.MAX_PLAYERS_PER_ROOM) || 8,
     roomCleanupInterval: parseInt(process.env.ROOM_CLEANUP_INTERVAL) || 120000, // 2 minutes
-    drawingTimeLimit: parseInt(process.env.DRAWING_TIME_LIMIT) || 60,
+    drawingTimeLimit: parseInt(process.env.DRAWING_TIME_LIMIT) || 120,
     votingTimeLimit: parseInt(process.env.VOTING_TIME_LIMIT) || 30,
     
     // AI Configuration

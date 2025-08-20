@@ -62,7 +62,7 @@ const environmentConfigs: Record<Environment, ClientConfig> = {
     enableRemoteLogging: false,
     
     // Game Configuration
-    drawingTimeLimit: 60,
+    drawingTimeLimit: 120,
     maxPlayers: 8,
     enableRealTimeDrawing: true,
     
@@ -93,7 +93,7 @@ const environmentConfigs: Record<Environment, ClientConfig> = {
     enableRemoteLogging: true,
     
     // Game Configuration
-    drawingTimeLimit: 60,
+    drawingTimeLimit: 120,
     maxPlayers: 8,
     enableRealTimeDrawing: true,
     
@@ -124,7 +124,7 @@ const environmentConfigs: Record<Environment, ClientConfig> = {
     enableRemoteLogging: true,
     
     // Game Configuration
-    drawingTimeLimit: 60,
+    drawingTimeLimit: 120,
     maxPlayers: 8,
     enableRealTimeDrawing: true,
     

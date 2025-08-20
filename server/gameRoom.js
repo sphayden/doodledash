@@ -8,7 +8,7 @@ class GameRoom {
     this.gamePhase = 'lobby'; // 'lobby', 'voting', 'drawing', 'judging', 'results'
     this.players = new Map(); // playerId -> Player object
     this.maxPlayers = parseInt(process.env.MAX_PLAYERS_PER_ROOM) || 8;
-    this.drawingTimeLimit = parseInt(process.env.DRAWING_TIME_LIMIT) || 60;
+    this.drawingTimeLimit = parseInt(process.env.DRAWING_TIME_LIMIT) || 120;
     
     // Voting state
     this.wordOptions = [];

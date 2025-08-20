@@ -93,7 +93,11 @@ class AIJudge {
     try {
       let aiResponse;
       
-      if (this.activeProvider === 'openai') {
+      // Check for empty canvas first (applies to all providers)
+      if (this.isCanvasEmpty(canvasData)) {
+        console.log(`🖼️ Empty canvas detected for ${playerName}`);
+        aiResponse = `SCORE: 3\nFEEDBACK: No drawing detected - appears to be a blank canvas.`;
+      } else if (this.activeProvider === 'openai') {
         aiResponse = await this.evaluateWithOpenAI(canvasData, word);
       } else if (this.activeProvider === 'gemini') {
         aiResponse = await this.evaluateWithGemini(canvasData, word);
@@ -165,9 +169,37 @@ class AIJudge {
   }
   
   /**
-   * Evaluate drawing using OpenAI GPT-4V
+   * Check if canvas is empty or mostly empty
+   */
+  isCanvasEmpty(canvasData) {
+    try {
+      // Extract base64 data
+      const base64Data = canvasData.replace(/^data:image\/[a-z]+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      // Very rough heuristic: small file size likely means empty canvas
+      // Empty/mostly empty canvas typically < 5KB
+      const isEmpty = buffer.length < 5000;
+      
+      console.log(`🔍 Canvas size check: ${buffer.length} bytes, isEmpty: ${isEmpty}`);
+      return isEmpty;
+    } catch (error) {
+      console.warn('❌ Error checking canvas emptiness:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Evaluate drawing using OpenAI GPT-4V with improved consistency
    */
   async evaluateWithOpenAI(canvasData, word) {
+    // Check for empty canvas first
+    if (this.isCanvasEmpty(canvasData)) {
+      console.log('📝 Empty canvas detected, assigning low score');
+      return `SCORE: 5
+FEEDBACK: No drawing detected - appears to be a blank canvas.`;
+    }
+
     const response = await this.openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -182,14 +214,15 @@ class AIJudge {
               type: "image_url",
               image_url: {
                 url: canvasData,
-                detail: "low" // Use low detail to reduce costs and improve speed
+                detail: "high" // Higher detail for better accuracy
               }
             }
           ]
         }
       ],
-      max_tokens: 150,
-      temperature: 0.3 // Moderate temperature for more varied scoring
+      max_tokens: 200, // More tokens for detailed feedback
+      temperature: 0.1, // Lower temperature for more consistent scoring
+      seed: 42 // Fixed seed for more consistency
     });
     
     return response.choices[0].message.content;
@@ -244,8 +277,9 @@ class AIJudge {
         role: "user",
         content: content
       }],
-      max_tokens: 800, // Increased for multiple evaluations
-      temperature: 0.3
+      max_tokens: 1000, // Increased for multiple evaluations
+      temperature: 0.1, // Lower temperature for consistency
+      seed: 42 // Fixed seed for reproducible results
     });
     
     return response.choices[0].message.content;
@@ -278,42 +312,38 @@ class AIJudge {
    * Generate evaluation prompt for GPT-4V
    */
   generateEvaluationPrompt(word) {
-    return `You are an AI judge for a multiplayer drawing game. Your job is to fairly evaluate this drawing of "${word}" on a scale of 1-100.
+    return `You are an AI judge for a multiplayer drawing game. Evaluate this drawing of "${word}" on a scale of 1-100.
 
-CRITICAL SCORING INSTRUCTIONS:
-- Use the FULL range from 1-100, being precise in your evaluation
-- Consider subtle differences between drawings - similar quality can have similar scores
-- AVOID multiples of 5 (70, 75, 80, 85, 90) - use fluid scores like 67, 73, 84, 91, 88
-- Score based purely on the drawing's merit relative to the word "${word}"
-- If two drawings are truly similar quality, similar scores are appropriate
+CRITICAL INSTRUCTIONS:
+- Be CONSISTENT in your scoring - similar drawings should get similar scores
+- Examine the image carefully for ANY drawn content before scoring
+- Empty or blank canvases should score 1-10 maximum
+- Use the FULL scoring range 1-100
+- AVOID multiples of 5 - use specific scores like 67, 73, 84, 91, 88
 
-Detailed Scoring Criteria:
-• 90-100: Exceptional - Professional quality, highly detailed, instantly recognizable, creative flair
-• 80-89: Very Good - Clear representation, good detail, recognizable with minor flaws
-• 70-79: Good - Recognizable with decent effort, some detail present
+SCORING CRITERIA (be strict and consistent):
+• 90-100: Exceptional - Professional quality, highly detailed, instantly recognizable
+• 80-89: Very Good - Clear representation, good detail, easily recognizable
+• 70-79: Good - Recognizable with decent effort and some detail
 • 60-69: Above Average - Somewhat recognizable, basic effort shown
-• 50-59: Average - Minimally recognizable, limited effort or detail
+• 50-59: Average - Minimally recognizable, limited effort
 • 40-49: Below Average - Hard to identify, very basic attempt
-• 30-39: Poor - Barely resembles the word, minimal effort
+• 30-39: Poor - Barely resembles "${word}", minimal effort
 • 20-29: Very Poor - Almost unrecognizable, very little effort
-• 10-19: Extremely Poor - No clear attempt to draw the word
-• 1-9: No Effort - Scribbles, blank, or completely unrelated
+• 10-19: Extremely Poor - No clear attempt to draw "${word}"
+• 1-9: No Effort - Blank canvas, scribbles, or completely unrelated
 
-Evaluation Focus:
-1. Immediate recognizability as "${word}"
-2. Artistic effort and attention to detail
-3. Accuracy to real-world appearance
-4. Creative interpretation and style
-5. Overall execution quality
+EVALUATION CHECKLIST:
+1. Is there ANY visible drawing content? (If no → score 1-10)
+2. Can you recognize it as "${word}"? (If no → score 10-40)
+3. How much effort and detail is shown? (affects score range)
+4. How accurate is it to real "${word}"? (affects final score)
 
-IMPORTANT: You must respond in this EXACT format:
-SCORE: [specific number 1-100]
-FEEDBACK: [your explanation]
+REQUIRED FORMAT:
+SCORE: [number 1-100]
+FEEDBACK: [one clear sentence explaining the score]
 
-Example:
-SCORE: 73
-FEEDBACK: Clear drawing with good proportions and recognizable features.
-Keep feedback short and concise. Should be one sentence.`;
+Be objective, consistent, and thorough in your evaluation.`;
   }
 
   /**

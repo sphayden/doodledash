@@ -247,80 +247,187 @@
   width: 280px;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 10px;
-  padding: 20px;
+  padding: 15px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(10px);
-  overflow: hidden;
+  overflow-y: auto;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  max-height: 100%;
+  height: fit-content;
 }
 
 .tool-section {
-  margin-bottom: clamp(15px, 3vh, 25px);
+  margin-bottom: clamp(8px, 1.5vh, 12px);
   flex-shrink: 0;
 }
 
 .tool-section:last-child {
   margin-bottom: 0;
-  flex: 1;
+  flex: none;
   display: flex;
   flex-direction: column;
 }
 
 .tool-section h4 {
-  margin: 0 0 clamp(10px, 2vh, 15px) 0;
+  margin: 0 0 clamp(6px, 1.5vh, 10px) 0;
   color: #333;
-  font-size: clamp(1rem, 2vh, 1.1rem);
+  font-size: clamp(0.9rem, 1.8vh, 1rem);
   font-weight: bold;
   flex-shrink: 0;
 }
 
-.color-palette {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: clamp(6px, 1vh, 8px);
+.color-dropdown-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.color-btn {
-  width: clamp(35px, 6vh, 40px);
-  height: clamp(35px, 6vh, 40px);
-  border: 3px solid transparent;
-  border-radius: 8px;
+.color-preview {
+  width: 30px;
+  height: 30px;
+  border: 2px solid #333;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.color-dropdown {
+  flex: 1;
+  padding: 8px;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  font-size: 0.9rem;
   cursor: pointer;
+}
+
+.color-dropdown:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+/* Custom Color Picker Styles */
+.custom-color-picker {
+  position: relative;
+  width: 100%;
+}
+
+.color-picker-trigger {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   transition: all 0.2s ease;
+  min-height: 40px;
+}
+
+.color-picker-trigger:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+}
+
+.color-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  flex: 1;
+}
+
+.dropdown-arrow {
+  font-size: 0.8rem;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  margin-left: 8px;
+}
+
+.color-picker-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  margin-top: 4px;
+  padding: 8px;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.color-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 2px solid #ccc;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
 }
 
-.color-btn:hover {
+.color-option:hover {
+  border-color: #007bff;
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.color-btn.active {
-  border-color: #333;
-  transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+.color-option.selected {
+  border-color: #007bff;
+  border-width: 3px;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.3);
+}
+
+.checkmark {
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Special handling for white color checkmark */
+.color-option[style*="rgb(255, 255, 255)"] .checkmark,
+.color-option[style*="#FFFFFF"] .checkmark,
+.color-option[style*="#ffffff"] .checkmark {
+  color: #007bff;
+  text-shadow: none;
 }
 
 .brush-sizes {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(6px, 1vh, 8px);
-  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(4px, 0.8vh, 6px);
+  flex: none;
 }
 
 .brush-btn {
   display: flex;
   align-items: center;
-  padding: clamp(6px, 1vh, 8px) clamp(10px, 2vh, 12px);
+  justify-content: center;
+  padding: clamp(4px, 0.8vh, 6px) clamp(6px, 1vh, 8px);
   border: 2px solid #dee2e6;
   border-radius: 6px;
   background: white;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
+  font-size: clamp(0.7rem, 1.2vh, 0.8rem);
 }
 
 .brush-btn:hover {
@@ -342,16 +449,15 @@
 .tool-buttons {
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 1.5vh, 10px);
-  flex: 1;
-  justify-content: flex-end;
+  gap: clamp(4px, 1vh, 6px);
+  flex: none;
 }
 
 .tool-btn {
-  padding: clamp(10px, 2vh, 12px) clamp(14px, 2.5vh, 16px);
+  padding: clamp(6px, 1.5vh, 8px) clamp(10px, 2vh, 12px);
   border: none;
   border-radius: 6px;
-  font-size: clamp(0.9rem, 2vh, 1rem);
+  font-size: clamp(0.8rem, 1.5vh, 0.9rem);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -383,6 +489,37 @@
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+.tool-btn.active {
+  background: #007bff;
+  color: white;
+  border: 2px solid #0056b3;
+}
+
+.tool-btn.active:hover:not(:disabled) {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+.undo-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.undo-btn:hover:not(:disabled) {
+  background: #5a6268;
+  transform: translateY(-1px);
+}
+
+.redo-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.redo-btn:hover:not(:disabled) {
+  background: #5a6268;
+  transform: translateY(-1px);
 }
 
 /* Responsive design */
