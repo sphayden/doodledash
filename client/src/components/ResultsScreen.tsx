@@ -20,47 +20,50 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
   onNewGame,
   onPlayAgain
 }) => {
-  const [showResults, setShowResults] = useState(false);
+  // Initialize showResults based on game state to prevent blank screen
+  const [showResults, setShowResults] = useState(
+    gameState.gamePhase === 'judging' || 
+    gameState.gamePhase === 'judging-failed' || 
+    (gameState.results && gameState.results.length > 0)
+  );
   const [currentResultIndex, setCurrentResultIndex] = useState(-1);
   const [showDrawingModal, setShowDrawingModal] = useState(false);
   const [selectedDrawing, setSelectedDrawing] = useState<GameResult | null>(null);
-  const [showCelebration, setShowCelebration] = useState(false);
+  // Removed: const [showCelebration, setShowCelebration] = useState(false);
   const [showJudgingErrorModal, setShowJudgingErrorModal] = useState(false);
-  const [showJudgingLoadingModal, setShowJudgingLoadingModal] = useState(false);
+  // Initialize loading modal based on current judging state to prevent blank screen
+  const [showJudgingLoadingModal, setShowJudgingLoadingModal] = useState(gameState.gamePhase === 'judging');
   
   // Detect game phases
   const judgingFailed = gameState.gamePhase === 'judging-failed';
   const isJudging = gameState.gamePhase === 'judging';
   const hasResults = gameState.results && gameState.results.length > 0;
 
-  // Handle different phases and modals
+  // Handle different phases and modals - immediate response
   useEffect(() => {
-    const timer = setTimeout(() => {
+    // Show loading modal immediately if currently judging
+    if (isJudging) {
+      setShowJudgingLoadingModal(true);
+      setShowJudgingErrorModal(false);
       setShowResults(true);
-      
-      // Show loading modal if currently judging
-      if (isJudging) {
-        setShowJudgingLoadingModal(true);
-        setShowJudgingErrorModal(false);
-      }
-      // Show error modal if judging failed
-      else if (judgingFailed) {
-        setShowJudgingLoadingModal(false);
-        setShowJudgingErrorModal(true);
-      }
-      // Show winner celebration for successful results
-      else if (hasResults) {
-        setShowJudgingLoadingModal(false);
-        setShowJudgingErrorModal(false);
-        const winner = gameState.results.find(r => r.rank === 1);
-        if (winner) {
-          setTimeout(() => setShowCelebration(true), 1000);
-          setTimeout(() => setShowCelebration(false), 4000);
-        }
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
+    }
+    // Show error modal if judging failed
+    else if (judgingFailed) {
+      setShowJudgingLoadingModal(false);
+      setShowJudgingErrorModal(true);
+      setShowResults(true);
+    }
+    // Show results without celebration overlay
+    else if (hasResults) {
+      setShowJudgingLoadingModal(false);
+      setShowJudgingErrorModal(false);
+      setShowResults(true);
+    }
+    // Default case - show results after brief delay for smooth transition
+    else {
+      const timer = setTimeout(() => setShowResults(true), 100);
+      return () => clearTimeout(timer);
+    }
   }, [gameState.results, gameState.gamePhase, judgingFailed, isJudging, hasResults]);
   
   // Reset modal state when component unmounts or game state changes significantly
@@ -69,7 +72,6 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
     return () => {
       setShowJudgingErrorModal(false);
       setShowJudgingLoadingModal(false);
-      setShowCelebration(false);
       setShowDrawingModal(false);
     };
   }, []);
@@ -139,18 +141,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
     <div className="results-screen">
       <AnimatedBackground />
       
-      {/* Celebration Animation */}
-      {showCelebration && (
-        <div className="celebration-overlay">
-          <div className="celebration-content">
-            <div className="celebration-emoji">🎉</div>
-            <div className="celebration-text">
-              Congratulations {gameState.results.find(r => r.rank === 1)?.playerName}!
-            </div>
-            <div className="celebration-emoji">🏆</div>
-          </div>
-        </div>
-      )}
+      {/* Removed celebration overlay for cleaner results display */}
 
       <div className="container-fluid">
         <div className="results-container">
@@ -172,7 +163,7 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
               />
             </div>
             <h1 className="results-title">
-              🎨 {isJudging ? 'AI Judging in Progress...' : judgingFailed ? 'Game Complete!' : 'AI Judging Results!'}
+              🎨 {isJudging ? 'AI Judging in Progress...' : judgingFailed ? 'Game Complete!' : 'Final Results!'}
             </h1>
             <p className="results-subtitle">
               The word was: <span className="chosen-word">"{gameState.chosenWord}"</span>
@@ -322,7 +313,6 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                     setShowJudgingErrorModal(false);
                     setShowJudgingLoadingModal(false);
                     setShowDrawingModal(false);
-                    setShowCelebration(false);
                     onPlayAgain();
                   }}
                   size="lg"
@@ -337,7 +327,6 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
                   setShowJudgingErrorModal(false);
                   setShowJudgingLoadingModal(false);
                   setShowDrawingModal(false);
-                  setShowCelebration(false);
                   onNewGame();
                 }}
                 size="lg"
@@ -467,22 +456,60 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({
         </Modal.Header>
         <Modal.Body className="text-center py-4">
           <div className="d-flex flex-column align-items-center">
-            <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
-              <span className="visually-hidden">Loading...</span>
+            {/* Animated AI Judge Icon */}
+            <div className="ai-judge-animation mb-3">
+              <div className="judge-emoji">🤖</div>
+              <div className="thinking-dots">
+                <span>.</span>
+                <span>.</span>
+                <span>.</span>
+              </div>
             </div>
-            <h5 className="mb-3">Analyzing your masterpieces...</h5>
+            
+            {/* Dynamic Status Messages */}
+            <h5 className="mb-3 judging-status">Analyzing your masterpieces...</h5>
             <p className="text-muted mb-3">
-              Our AI judge is carefully evaluating each drawing for "{gameState.chosenWord}".
+              Our AI judge is carefully evaluating each drawing for <strong>"{gameState.chosenWord}"</strong>
             </p>
-            <div className="progress w-100 mb-3" style={{height: '8px'}}>
+            
+            {/* Artistic Progress Indicators */}
+            <div className="judging-criteria mb-3">
+              <div className="criteria-item">
+                <span className="criteria-icon">👁️</span>
+                <span className="criteria-text">Recognizability</span>
+                <div className="criteria-check">✓</div>
+              </div>
+              <div className="criteria-item">
+                <span className="criteria-icon">🎨</span>
+                <span className="criteria-text">Creativity</span>
+                <div className="criteria-check">✓</div>
+              </div>
+              <div className="criteria-item">
+                <span className="criteria-icon">⚡</span>
+                <span className="criteria-text">Execution</span>
+                <div className="criteria-check">✓</div>
+              </div>
+            </div>
+            
+            {/* Animated Progress Bar */}
+            <div className="progress w-100 mb-3 judging-progress" style={{height: '12px'}}>
               <div 
-                className="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                style={{width: '100%'}}
+                className="progress-bar progress-bar-striped progress-bar-animated"
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(45deg, #007bff, #0056b3, #007bff)',
+                  backgroundSize: '200% 100%',
+                  animation: 'judging-gradient 2s linear infinite'
+                }}
               ></div>
             </div>
-            <small className="text-muted">
-              🎨 Considering creativity, accuracy, and recognizability...
-            </small>
+            
+            <div className="judging-tips">
+              <small className="text-muted">
+                <span className="tip-icon">💡</span>
+                The AI considers artistic effort, accuracy, and how well the drawing represents "{gameState.chosenWord}"
+              </small>
+            </div>
           </div>
         </Modal.Body>
       </Modal>

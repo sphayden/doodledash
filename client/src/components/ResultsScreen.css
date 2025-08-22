@@ -73,56 +73,160 @@
   font-size: 1.1em;
 }
 
-/* Celebration Animation */
-.celebration-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
+/* AI Judging Animation Styles */
+.ai-judge-animation {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.judge-emoji {
+  font-size: 4rem;
+  animation: judgeFloat 3s ease-in-out infinite;
+  margin-bottom: 10px;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.thinking-dots span {
+  font-size: 1.5rem;
+  color: #007bff;
+  animation: thinkingDots 1.5s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+.judging-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 300px;
+}
+
+.criteria-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
-  animation: celebrationFade 4s ease-in-out;
-  pointer-events: none;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #007bff;
+  animation: criteriaSlideIn 0.6s ease-out;
 }
 
-.celebration-content {
-  text-align: center;
-  animation: celebrationBounce 2s ease-in-out;
+.criteria-item:nth-child(1) { animation-delay: 1s; }
+.criteria-item:nth-child(2) { animation-delay: 1.3s; }
+.criteria-item:nth-child(3) { animation-delay: 1.6s; }
+
+.criteria-icon {
+  font-size: 1.2rem;
+  margin-right: 8px;
 }
 
-.celebration-emoji {
-  font-size: clamp(3rem, 8vw, 6rem);
-  animation: celebrationSpin 2s ease-in-out;
-  margin: 10px 0;
+.criteria-text {
+  flex: 1;
+  font-weight: 500;
+  color: #495057;
 }
 
-.celebration-text {
-  color: white;
-  font-size: clamp(1.5rem, 4vw, 2.5rem);
+.criteria-check {
+  color: #28a745;
   font-weight: bold;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
-  margin: 20px 0;
+  opacity: 0;
+  animation: checkAppear 0.5s ease-out 2s forwards;
 }
 
-@keyframes celebrationFade {
-  0%, 100% { opacity: 0; }
-  20%, 80% { opacity: 1; }
+.criteria-item:nth-child(1) .criteria-check { animation-delay: 2s; }
+.criteria-item:nth-child(2) .criteria-check { animation-delay: 2.3s; }
+.criteria-item:nth-child(3) .criteria-check { animation-delay: 2.6s; }
+
+.judging-progress {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-@keyframes celebrationBounce {
-  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-30px); }
-  60% { transform: translateY(-15px); }
+.judging-status {
+  animation: statusPulse 2s ease-in-out infinite;
 }
 
-@keyframes celebrationSpin {
-  0% { transform: rotate(0deg) scale(0.5); }
-  50% { transform: rotate(180deg) scale(1.2); }
-  100% { transform: rotate(360deg) scale(1); }
+.judging-tips {
+  background: #e3f2fd;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+  animation: tipsFadeIn 0.5s ease-out 3s both;
+}
+
+.tip-icon {
+  margin-right: 6px;
+  animation: tipGlow 2s ease-in-out infinite;
+}
+
+/* Keyframe Animations */
+@keyframes judgeFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes thinkingDots {
+  0%, 60%, 100% { transform: translateY(0px); opacity: 0.4; }
+  30% { transform: translateY(-10px); opacity: 1; }
+}
+
+@keyframes criteriaSlideIn {
+  from { 
+    transform: translateX(-20px); 
+    opacity: 0; 
+  }
+  to { 
+    transform: translateX(0); 
+    opacity: 1; 
+  }
+}
+
+@keyframes checkAppear {
+  from { 
+    opacity: 0; 
+    transform: scale(0.5); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+@keyframes judging-gradient {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes tipsFadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes tipGlow {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; transform: scale(1.1); }
 }
 
 /* Results Grid - Horizontal Scrolling Layout */

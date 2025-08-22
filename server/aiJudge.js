@@ -137,12 +137,21 @@ class AIJudge {
     const { word } = drawingSubmissions[0];
     
     try {
+      // Pre-check for empty canvases to inform the AI
+      const emptyCanvasInfo = drawingSubmissions.map(submission => ({
+        playerName: submission.playerName,
+        isEmpty: this.isCanvasEmpty(submission.canvasData)
+      }));
+      
+      const emptyCount = emptyCanvasInfo.filter(info => info.isEmpty).length;
+      console.log(`🔍 Pre-check: ${emptyCount}/${drawingSubmissions.length} canvases appear empty`);
+      
       let aiResponse;
       
       if (this.activeProvider === 'openai') {
-        aiResponse = await this.evaluateAllWithOpenAI(drawingSubmissions, word);
+        aiResponse = await this.evaluateAllWithOpenAI(drawingSubmissions, word, emptyCanvasInfo);
       } else if (this.activeProvider === 'gemini') {
-        aiResponse = await this.evaluateAllWithGemini(drawingSubmissions, word);
+        aiResponse = await this.evaluateAllWithGemini(drawingSubmissions, word, emptyCanvasInfo);
       } else {
         throw new Error('No AI provider available');
       }
@@ -177,12 +186,38 @@ class AIJudge {
       const base64Data = canvasData.replace(/^data:image\/[a-z]+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
       
-      // Very rough heuristic: small file size likely means empty canvas
-      // Empty/mostly empty canvas typically < 5KB
-      const isEmpty = buffer.length < 5000;
+      // Check for known empty canvas patterns
+      const knownEmptyCanvas = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+      if (base64Data === knownEmptyCanvas) {
+        console.log(`🔍 Detected known empty canvas pattern`);
+        return true;
+      }
       
-      console.log(`🔍 Canvas size check: ${buffer.length} bytes, isEmpty: ${isEmpty}`);
-      return isEmpty;
+      // Enhanced heuristics for empty canvas detection
+      const bufferSize = buffer.length;
+      
+      // 1. Very small files are likely empty
+      if (bufferSize < 2000) {
+        console.log(`🔍 Canvas size check: ${bufferSize} bytes - very small, likely empty`);
+        return true;
+      }
+      
+      // 2. Check for blank/white canvas patterns (larger but still empty)
+      if (bufferSize < 10000) {
+        // For PNG files, check if it's mostly header data with minimal image content
+        // This catches larger blank canvases that still have minimal content
+        console.log(`🔍 Canvas size check: ${bufferSize} bytes - small, likely empty/blank`);
+        return true;
+      }
+      
+      // 3. Check the base64 data for repetitive patterns (blank canvas indicators)
+      if (base64Data.includes('AAAA') && base64Data.length < 1000) {
+        console.log(`🔍 Detected repetitive pattern in small canvas - likely empty`);
+        return true;
+      }
+      
+      console.log(`🔍 Canvas size check: ${bufferSize} bytes - appears to have content`);
+      return false;
     } catch (error) {
       console.warn('❌ Error checking canvas emptiness:', error);
       return false;
@@ -252,11 +287,11 @@ FEEDBACK: No drawing detected - appears to be a blank canvas.`;
   /**
    * Evaluate all drawings with OpenAI in a single request
    */
-  async evaluateAllWithOpenAI(drawingSubmissions, word) {
+  async evaluateAllWithOpenAI(drawingSubmissions, word, emptyCanvasInfo = null) {
     const content = [
       {
         type: "text",
-        text: this.generateBatchEvaluationPrompt(word, drawingSubmissions)
+        text: this.generateBatchEvaluationPrompt(word, drawingSubmissions, emptyCanvasInfo)
       }
     ];
 
@@ -288,8 +323,8 @@ FEEDBACK: No drawing detected - appears to be a blank canvas.`;
   /**
    * Evaluate all drawings with Gemini in a single request
    */
-  async evaluateAllWithGemini(drawingSubmissions, word) {
-    const prompt = this.generateBatchEvaluationPrompt(word, drawingSubmissions);
+  async evaluateAllWithGemini(drawingSubmissions, word, emptyCanvasInfo = null) {
+    const prompt = this.generateBatchEvaluationPrompt(word, drawingSubmissions, emptyCanvasInfo);
     const contentParts = [prompt];
 
     // Add all images
@@ -349,17 +384,31 @@ Be objective, consistent, and thorough in your evaluation.`;
   /**
    * Generate batch evaluation prompt for comparing multiple drawings
    */
-  generateBatchEvaluationPrompt(word, drawingSubmissions) {
+  generateBatchEvaluationPrompt(word, drawingSubmissions, emptyCanvasInfo = null) {
     const playerList = drawingSubmissions.map((submission, index) => 
       `Drawing ${index + 1}: ${submission.playerName}`
     ).join('\n');
 
+    let emptyCanvasWarning = '';
+    if (emptyCanvasInfo) {
+      const emptyPlayers = emptyCanvasInfo.filter(info => info.isEmpty).map(info => info.playerName);
+      if (emptyPlayers.length > 0) {
+        emptyCanvasWarning = `\n\nIMPORTANT EMPTY CANVAS ALERT:
+The following players appear to have submitted blank/empty canvases: ${emptyPlayers.join(', ')}
+- Empty or blank canvases should receive scores of 1-10 maximum
+- Do NOT give high scores to empty canvases regardless of file size or technical formatting
+- Only actual drawn content should receive meaningful scores`;
+      }
+    }
+
     return `You are an AI judge for a multiplayer drawing game. You will see ${drawingSubmissions.length} drawings of "${word}" and must evaluate and rank them relative to each other.
 
-${playerList}
+${playerList}${emptyCanvasWarning}
 
 CRITICAL SCORING INSTRUCTIONS:
 - Score each drawing from 1-100 based on how well it represents "${word}"
+- EMPTY/BLANK CANVASES MUST SCORE 1-10 MAXIMUM - no exceptions!
+- Only drawings with actual visible content should receive scores above 20
 - Compare drawings relative to each other - better drawings should get higher scores
 - AVOID multiples of 5 (70, 75, 80, 85, 90) - use fluid scores like 67, 73, 84, 91, 88
 - Use the full scoring range and create meaningful differences between drawings
@@ -376,7 +425,10 @@ Scoring Guidelines:
 • 30-39: Poor attempt, barely resembles the word
 • 20-29: Very poor, almost unrecognizable
 • 10-19: Minimal effort, no clear attempt
-• 1-9: No real effort or completely unrelated
+• 1-9: Empty canvas, blank submission, or completely unrelated
+
+BLANK CANVAS CHECK:
+Before scoring, verify each image contains actual drawn content. If you see only white/blank space or no meaningful drawing, score it 1-10 maximum.
 
 IMPORTANT: Respond with evaluations for each drawing in this EXACT format:
 
